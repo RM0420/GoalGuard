@@ -1,10 +1,16 @@
 {
   "expo": {
     "scheme": "acme",
-    "plugins": [
-      "expo-router"
-    ],
+    "plugins": ["expo-router", "react-native-health"],
     "name": "GoalGuard",
-    "slug": "GoalGuard"
+    "slug": "GoalGuard",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.goalguard.app",
+      "infoPlist": {
+        "NSHealthShareUsageDescription": "GoalGuard needs access to your step count and distance data to track progress towards your daily goals.",
+        "NSHealthUpdateUsageDescription": "GoalGuard needs to update your health data to log workouts and goal achievements."
+      }
+    }
   }
 }

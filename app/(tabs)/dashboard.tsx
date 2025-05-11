@@ -3,6 +3,7 @@ import { View, StyleSheet } from "react-native";
 import { Text, Card, ActivityIndicator, Button } from "react-native-paper";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { useUserProfile } from "../../src/contexts/UserProfileContext";
+import { useGoals } from "../../src/contexts/GoalsContext";
 
 /**
  * `DashboardScreen` is the main screen users see after logging in.
@@ -12,6 +13,7 @@ import { useUserProfile } from "../../src/contexts/UserProfileContext";
 export default function DashboardScreen() {
   const { user, signOut } = useAuth();
   const { profile, loadingProfile, refreshUserProfile } = useUserProfile();
+  const { currentDailyGoal, isLoadingGoal } = useGoals();
 
   if (loadingProfile) {
     return (
@@ -44,8 +46,23 @@ export default function DashboardScreen() {
       <Card style={styles.card}>
         <Card.Title title="Today's Goal" />
         <Card.Content>
-          <Text>Goal details will go here...</Text>
-          {/* Display current day's goal and progress towards it */}
+          {isLoadingGoal && !currentDailyGoal ? (
+            <ActivityIndicator animating={true} />
+          ) : currentDailyGoal ? (
+            <>
+              <Text variant="bodyLarge">
+                Type: {currentDailyGoal.goal_type}
+              </Text>
+              <Text variant="bodyLarge">
+                Target: {currentDailyGoal.target_value}{" "}
+                {currentDailyGoal.target_unit}
+              </Text>
+              <Text variant="bodyLarge">Status: {currentDailyGoal.status}</Text>
+              {/* Add more details or a link to the Goals screen */}
+            </>
+          ) : (
+            <Text>No goal set for today. Go to the Goals tab to set one!</Text>
+          )}
         </Card.Content>
       </Card>
 
