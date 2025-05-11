@@ -10,6 +10,8 @@
     "deploy": "npx expo export -p web && npx eas-cli@latest deploy"
   },
   "dependencies": {
+    "@react-native-async-storage/async-storage": "^2.1.2",
+    "@supabase/supabase-js": "^2.49.4",
     "expo": "^53.0.4",
     "expo-constants": "~17.1.4",
     "expo-linking": "~7.1.4",
@@ -20,12 +22,38 @@
     "react-dom": "19.0.0",
     "react-native": "0.79.1",
     "react-native-gesture-handler": "~2.24.0",
+    "react-native-paper": "^5.14.1",
     "react-native-safe-area-context": "5.3.0",
     "react-native-screens": "~4.10.0",
+    "react-native-url-polyfill": "^2.0.0",
     "react-native-web": "^0.20.0"
   },
   "devDependencies": {
-    "@babel/core": "^7.20.0"
+    "@babel/core": "^7.20.0",
+    "@types/react": "~19.0.10",
+    "events": "^3.3.0",
+    "typescript": "~5.8.3"
   },
-  "private": true
+  "private": true,
+  "browser": {
+    "http": "./empty-shim.js",
+    "https": "./empty-shim.js",
+    "fs": "./empty-shim.js",
+    "tls": "./empty-shim.js",
+    "net": "./empty-shim.js",
+    "zlib": "./empty-shim.js",
+    "os": "./empty-shim.js",
+    "path": "./empty-shim.js",
+    "stream": "./empty-shim.js",
+    "crypto": "./empty-shim.js",
+    "events": "./empty-shim.js",
+    "util": "./empty-shim.js",
+    "url": "./empty-shim.js",
+    "assert": "./empty-shim.js",
+    "constants": "./empty-shim.js",
+    "tty": "./empty-shim.js",
+    "vm": "./empty-shim.js",
+    "dgram": "./empty-shim.js",
+    "child_process": "./empty-shim.js"
+  }
 }
