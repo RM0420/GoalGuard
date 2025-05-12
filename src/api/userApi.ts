@@ -89,6 +89,108 @@ export const getUserProfile = async (
   }
 };
 
+/**
+ * `awardCoins`
+ * Calls a Supabase RPC function to increment the user's coin balance and log the transaction.
+ * @param {string} userId - The ID of the user to award coins to.
+ * @param {number} amount - The number of coins to award.
+ * @param {string} transactionType - The type of transaction (e.g., 'goal_completion_reward').
+ * @param {string} transactionDescription - A description for the transaction.
+ * @param {string | null} [relatedGoalId] - Optional ID of the related goal.
+ * @returns {Promise<{ success: boolean; error?: any }>} An object indicating success or failure.
+ */
+export const awardCoins = async (
+  userId: string,
+  amount: number,
+  transactionType: string,
+  transactionDescription: string,
+  relatedGoalId?: string | null
+): Promise<{ success: boolean; error?: any }> => {
+  if (!userId) {
+    return { success: false, error: { message: "User ID is required." } };
+  }
+  if (amount <= 0) {
+    return {
+      success: false,
+      error: { message: "Coin amount must be positive." },
+    };
+  }
+  if (!transactionType) {
+    return {
+      success: false,
+      error: { message: "Transaction type is required." },
+    };
+  }
+
+  try {
+    const { error } = await supabase.rpc("increment_coin_balance", {
+      user_id_input: userId,
+      amount_input: amount,
+      transaction_type: transactionType,
+      transaction_description: transactionDescription,
+      transaction_related_goal_id:
+        relatedGoalId === undefined ? null : relatedGoalId, // Ensure null is passed if undefined
+    });
+
+    if (error) {
+      console.error("Error calling increment_coin_balance RPC:", error);
+      throw error;
+    }
+    return { success: true };
+  } catch (error) {
+    return { success: false, error };
+  }
+};
+
+/**
+ * `updateStreakAndAwardBonus`
+ * Calls a Supabase RPC function to update the user's streak based on goal completion
+ * and award bonus coins if applicable (also logs streak bonus transaction).
+ * @param {string} userId - The ID of the user.
+ * @param {string} goalDate - The date of the completed goal (YYYY-MM-DD).
+ * @param {string} goalId - The ID of the completed goal.
+ * @param {number} bonusThreshold - The streak length needed to qualify for a bonus.
+ * @param {number} bonusCoins - The number of bonus coins to award.
+ * @returns {Promise<{ newStreakLength?: number; error?: any }>} An object with new streak length or an error.
+ */
+export const updateStreakAndAwardBonus = async (
+  userId: string,
+  goalDate: string,
+  goalId: string, // Added goalId
+  bonusThreshold: number,
+  bonusCoins: number
+): Promise<{ newStreakLength?: number; error?: any }> => {
+  if (!userId) {
+    return { error: { message: "User ID is required." } };
+  }
+  if (!goalId) {
+    return { error: { message: "Goal ID is required for streak processing." } };
+  }
+  try {
+    const { data, error } = await supabase.rpc(
+      "handle_goal_completion_streaks_and_bonus",
+      {
+        user_id_input: userId,
+        goal_date_input: goalDate,
+        goal_id_input: goalId, // Pass goalId
+        bonus_threshold: bonusThreshold,
+        bonus_coins: bonusCoins,
+      }
+    );
+
+    if (error) {
+      console.error(
+        "Error calling handle_goal_completion_streaks_and_bonus RPC:",
+        error
+      );
+      throw error;
+    }
+    return { newStreakLength: data as number };
+  } catch (error) {
+    return { error };
+  }
+};
+
 // Add other user-related API functions here as the app grows:
 // - مثلاً: function to update specific profile settings
 // - مثلاً: function to fetch public profile of another user (if feature exists)

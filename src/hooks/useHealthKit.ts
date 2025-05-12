@@ -1,37 +1,19 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Platform } from "react-native";
-import AppleHealthKit, {
-  HealthKitPermissions,
-  HealthValue,
-  HealthInputOptions,
-  HealthUnit,
-} from "react-native-health";
+import {
+  HealthService,
+  HealthData as ServiceHealthData,
+} from "../services/HealthService";
 
-// Define the permissions your app needs
-// We want to read steps and distance
-const permissions: HealthKitPermissions = {
-  permissions: {
-    read: [
-      AppleHealthKit.Constants.Permissions.Steps,
-      AppleHealthKit.Constants.Permissions.DistanceWalkingRunning,
-      // Add other permissions as needed, e.g., ActiveEnergyBurned
-    ],
-    write: [
-      // We are not writing any data for now
-      // AppleHealthKit.Constants.Permissions.Steps, // Example if you wanted to write steps
-    ],
-  },
-};
-
-interface HealthData {
-  steps: number;
-  distance: number; // in meters
-  // Add other data points as needed
+interface HealthKitData extends ServiceHealthData {
+  // Inherits steps?: number, distance?: number (in km from service)
+  // Add any additional UI-specific transformations or properties if needed
 }
 
-interface UseHealthKitOutput extends HealthData {
+interface UseHealthKitOutput extends HealthKitData {
   isLoading: boolean;
   error: Error | null;
+  hasPermissions: boolean;
   requestPermissions: () => Promise<boolean>;
   fetchDailyHealthData: (date?: Date) => Promise<void>;
 }
@@ -41,124 +23,106 @@ const useHealthKit = (): UseHealthKitOutput => {
   const [error, setError] = useState<Error | null>(null);
   const [hasPermissions, setHasPermissions] = useState<boolean>(false);
 
-  const [steps, setSteps] = useState<number>(0);
-  const [distance, setDistance] = useState<number>(0);
+  const [steps, setSteps] = useState<number | undefined>(undefined);
+  const [distance, setDistance] = useState<number | undefined>(undefined); // Distance in km as per service
 
   /**
-   * Initializes HealthKit and requests permissions.
-   * Should be called once, perhaps when a component mounts or user initiates action.
+   * Initializes the HealthService (which simulates permission granting for the mock).
    */
-  const requestPermissions = async (): Promise<boolean> => {
-    if (Platform.OS !== "ios") {
-      setError(new Error("HealthKit is only available on iOS."));
-      return false;
-    }
+  const requestPermissions = useCallback(async (): Promise<boolean> => {
+    // The mock service's initialize() also checks Platform.OS
     setIsLoading(true);
     setError(null);
-
-    return new Promise((resolve) => {
-      AppleHealthKit.initHealthKit(permissions, (err: string | null) => {
-        if (err) {
-          console.error("[ERROR] Cannot grant HealthKit permissions!", err);
-          setError(new Error(`Error initializing HealthKit: ${err}`));
-          setHasPermissions(false);
-          setIsLoading(false);
-          resolve(false);
-          return;
-        }
-        console.log("HealthKit permissions granted (or previously granted).");
-        setHasPermissions(true);
-        setIsLoading(false);
-        resolve(true);
-      });
-    });
-  };
+    try {
+      const success = await HealthService.initialize();
+      setHasPermissions(success);
+      if (!success && Platform.OS === "ios") {
+        // If real initialization failed on iOS
+        setError(new Error("Failed to initialize HealthKit service."));
+      } else if (!success) {
+        // For mock or non-iOS, initialize might return true but good to note
+        console.log("HealthService initialized (mock or non-iOS).");
+      }
+      return success;
+    } catch (e: any) {
+      console.error("[ERROR] Cannot grant HealthKit permissions!", e);
+      setError(
+        new Error(`Error initializing HealthKit: ${e.message || e.toString()}`)
+      );
+      setHasPermissions(false);
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
   /**
-   * Fetches daily step count and distance for a given date (defaults to today).
-   * Assumes permissions have already been granted.
+   * Fetches daily step count and distance using the HealthService.
    */
-  const fetchDailyHealthData = async (
-    date: Date = new Date()
-  ): Promise<void> => {
-    if (Platform.OS !== "ios" || !hasPermissions) {
+  const fetchDailyHealthData = useCallback(
+    async (_date?: Date): Promise<void> => {
+      // The mock service doesn't currently use the date parameter but it's kept for API consistency
       if (!hasPermissions && Platform.OS === "ios") {
         setError(
           new Error(
             "HealthKit permissions not granted. Please request permissions first."
           )
         );
+        // For non-iOS or mock, we might proceed if initialization was "successful"
+        // but actual data fetching depends on the service's behavior
       }
-      return;
-    }
-
-    setIsLoading(true);
-    setError(null);
-
-    const options: HealthInputOptions = {
-      date: date.toISOString(), // Date for which to fetch data (typically today)
-      includeManuallyAdded: true, // Consider data manually added by the user in Health app
-    };
-
-    // Fetch Steps
-    AppleHealthKit.getStepCount(
-      options,
-      (err: string | null, result: HealthValue) => {
-        if (err) {
-          console.error("Error fetching step count:", err);
-          setError(
-            (prevError) =>
-              new Error(
-                `${
-                  prevError?.message || ""
-                }\nError fetching steps: ${err}`.trim()
-              )
-          );
-          // Don't stop loading yet, try fetching distance
-        }
-        if (result) {
-          console.log(`Steps for ${date.toDateString()}: ${result.value}`);
-          setSteps(result.value);
-        }
+      if (!hasPermissions && Platform.OS !== "ios") {
+        // Allow mock data fetching even if "permissions" (initialize) were notionally false for non-iOS
+        console.log(
+          "Proceeding with mock data fetch on non-iOS platform or without explicit permissions."
+        );
+      } else if (!hasPermissions) {
+        setError(
+          new Error("Permissions not granted. Cannot fetch health data.")
+        );
+        return;
       }
-    );
 
-    // Fetch Distance Walking/Running
-    // The unit for DistanceWalkingRunning is typically meters
-    AppleHealthKit.getDistanceWalkingRunning(
-      options,
-      (err: string | null, result: HealthValue) => {
-        setIsLoading(false); // Set loading to false after the last fetch attempt
-        if (err) {
-          console.error("Error fetching distance:", err);
-          setError(
-            (prevError) =>
-              new Error(
-                `${
-                  prevError?.message || ""
-                }\nError fetching distance: ${err}`.trim()
-              )
-          );
-          return;
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const todaySteps = await HealthService.getTodaysSteps();
+        const todayDistance = await HealthService.getTodaysDistance();
+
+        if (todaySteps !== null) {
+          setSteps(todaySteps);
+        } else {
+          // Optionally set error or leave as undefined if service returns null for "unavailable"
+          console.log("Steps data unavailable from service.");
         }
-        if (result) {
-          console.log(
-            `Distance for ${date.toDateString()}: ${result.value} meters`
-          );
-          setDistance(result.value); // Assuming value is in meters
+
+        if (todayDistance !== null) {
+          setDistance(todayDistance); // Service provides distance in km
+        } else {
+          console.log("Distance data unavailable from service.");
         }
+      } catch (e: any) {
+        console.error("Error fetching health data from service:", e);
+        setError(
+          new Error(`Error fetching health data: ${e.message || e.toString()}`)
+        );
+        setSteps(undefined);
+        setDistance(undefined);
+      } finally {
+        setIsLoading(false);
       }
-    );
-  };
+    },
+    [hasPermissions]
+  );
 
-  // Potentially auto-request permissions or fetch data if permissions are already granted
-  // This depends on the desired UX. For now, we expose functions to be called manually.
-
+  // Expose steps and distance from state
   return {
     isLoading,
     error,
+    hasPermissions,
     steps,
-    distance,
+    distance, // This will be in km
     requestPermissions,
     fetchDailyHealthData,
   };

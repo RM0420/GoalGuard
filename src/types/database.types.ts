@@ -32,5 +32,23 @@ export interface UserProfile {
   // `updated_at` is also in the table but might not always be fetched/used in profile context
 }
 
+/**
+ * Represents the structure of a daily progress entry as stored in the `daily_progress` table.
+ */
+export interface DailyProgress {
+  id: string; // UUID, Primary Key
+  user_id: string; // UUID, Foreign Key to users(id)
+  goal_id: string; // UUID, Foreign Key to goals(id)
+  date: string; // ISO date string (YYYY-MM-DD)
+  progress_data: {
+    // JSONB field
+    steps_count?: number;
+    distance_ran_km?: number;
+    // Add other relevant progress metrics as needed
+  };
+  last_fetched_from_healthkit: string; // ISO timestamp string
+  created_at: string; // ISO timestamp string
+}
+
 // Add other table types here as your schema grows.
 // For example, types for `users`, `daily_progress`, `coin_transactions` etc.

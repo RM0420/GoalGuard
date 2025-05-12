@@ -9,6 +9,12 @@ import React, {
 import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "./AuthContext";
 import { User } from "@supabase/supabase-js";
+import * as userApi from "../api/userApi";
+import {
+  COINS_FOR_DAILY_GOAL_COMPLETION,
+  STREAK_BONUS_COINS_PER_DAY,
+  STREAK_BONUS_THRESHOLD_DAYS,
+} from "../constants/gamification";
 
 /**
  * @interface UserProfile
@@ -31,6 +37,15 @@ interface UserProfileContextType {
   loadingProfile: boolean;
   fetchUserProfile: (currentUser: User) => Promise<void>;
   refreshUserProfile: () => Promise<void>; // To re-fetch after updates
+  awardCoinsForGoalCompletion: (
+    userId: string,
+    goalId: string
+  ) => Promise<boolean>;
+  processStreakUpdateAndBonus: (
+    userId: string,
+    goalDate: string,
+    goalId: string
+  ) => Promise<boolean>;
 }
 
 const UserProfileContext = createContext<UserProfileContextType | undefined>(
@@ -151,11 +166,110 @@ export const UserProfileProvider: React.FC<UserProfileProviderProps> = ({
     }
   }, [user, fetchUserProfile]);
 
+  /**
+   * `awardCoinsForGoalCompletion` awards a predefined number of coins to the user
+   * for completing their daily goal.
+   * @param {string} userId - The ID of the user to award coins to.
+   * @param {string} goalId - The ID of the goal associated with the completion.
+   * @returns {Promise<boolean>} True if coins were awarded successfully, false otherwise.
+   */
+  const awardCoinsForGoalCompletion = useCallback(
+    async (userId: string, goalId: string): Promise<boolean> => {
+      if (!userId || !goalId) {
+        console.error(
+          "awardCoinsForGoalCompletion: userId and goalId are required."
+        );
+        return false;
+      }
+      try {
+        const { success, error } = await userApi.awardCoins(
+          userId,
+          COINS_FOR_DAILY_GOAL_COMPLETION,
+          "goal_completion_reward",
+          `Awarded for completing daily goal.`,
+          goalId
+        );
+        if (success) {
+          console.log(
+            `Base coins API call successful for user \${userId} for goal \${goalId}.`
+          );
+          return true;
+        } else {
+          console.error(
+            "Failed to award base coins for goal completion:",
+            error || "Unknown error from userApi.awardCoins"
+          );
+          return false;
+        }
+      } catch (apiError) {
+        console.error(
+          "Exception in awardCoinsForGoalCompletion (base coins only):",
+          apiError
+        );
+        return false;
+      }
+    },
+    []
+  );
+
+  /**
+   * `processStreakUpdateAndBonus` calls the API to update the user's streak and award bonus coins if applicable.
+   * It then refreshes the user profile to reflect any changes in streak length or coin balance.
+   * @param {string} userId - The ID of the user.
+   * @param {string} goalDate - The date of the completed goal (YYYY-MM-DD).
+   * @param {string} goalId - The ID of the goal associated with the completion.
+   * @returns {Promise<boolean>} True if streak processing was successful (even if no bonus was awarded), false on error.
+   */
+  const processStreakUpdateAndBonus = useCallback(
+    async (
+      userId: string,
+      goalDate: string,
+      goalId: string
+    ): Promise<boolean> => {
+      if (!userId || !goalDate || !goalId) {
+        console.error(
+          "processStreakUpdateAndBonus: userId, goalDate, and goalId are required."
+        );
+        return false;
+      }
+      try {
+        const { newStreakLength, error } =
+          await userApi.updateStreakAndAwardBonus(
+            userId,
+            goalDate,
+            goalId,
+            STREAK_BONUS_THRESHOLD_DAYS,
+            STREAK_BONUS_COINS_PER_DAY
+          );
+
+        if (error) {
+          console.error("Failed to process streak update and bonus:", error);
+          // Don't necessarily refresh if this specific part fails, as base coins might have been awarded.
+          // Or, decide if a refresh is always wanted.
+          return false;
+        }
+
+        console.log(
+          `Streak updated for user \${userId}. New streak: \${newStreakLength}. Bonus coins may have been awarded if threshold met.`
+        );
+        // Crucially, refresh the profile to get updated streak AND any bonus coins.
+        await refreshUserProfile();
+        return true;
+      } catch (apiError) {
+        console.error("Exception in processStreakUpdateAndBonus:", apiError);
+        return false;
+      }
+    },
+    [refreshUserProfile]
+  );
+
   const value = {
     profile,
     loadingProfile,
     fetchUserProfile,
     refreshUserProfile,
+    awardCoinsForGoalCompletion,
+    processStreakUpdateAndBonus,
   };
 
   return (

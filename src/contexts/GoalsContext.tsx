@@ -8,6 +8,7 @@ import React, {
 } from "react";
 import { User } from "@supabase/supabase-js";
 import { useAuth } from "./AuthContext";
+import { useUserProfile } from "./UserProfileContext";
 import { Goal } from "../types/database.types";
 import {
   getGoalByDate,
@@ -58,6 +59,8 @@ interface GoalsProviderProps {
  */
 export const GoalsProvider: React.FC<GoalsProviderProps> = ({ children }) => {
   const { user, session } = useAuth();
+  const { awardCoinsForGoalCompletion, processStreakUpdateAndBonus } =
+    useUserProfile();
   const [currentDailyGoal, setCurrentDailyGoal_state] = useState<Goal | null>(
     null
   );
@@ -139,20 +142,81 @@ export const GoalsProvider: React.FC<GoalsProviderProps> = ({ children }) => {
       return null;
     }
     setIsLoadingGoal(true);
-    const { data, error } = await updateGoal(user, goalId, updates);
+    const { data: updatedGoalData, error } = await updateGoal(
+      user!, // Assuming user is checked above
+      goalId,
+      updates
+    );
+    setIsLoadingGoal(false);
+
     if (error) {
       Alert.alert(
         "Error Updating Goal",
         error.message || "Could not update your goal."
       );
-      setIsLoadingGoal(false);
       return null;
-    } else {
-      setCurrentDailyGoal_state(data || null);
-      setIsLoadingGoal(false);
-      Alert.alert("Success", "Goal updated successfully!");
-      return data || null;
     }
+
+    setCurrentDailyGoal_state(updatedGoalData || null);
+    Alert.alert("Success", "Goal updated successfully!");
+
+    console.log("[GoalsContext] Checking conditions for rewards...");
+    console.log("[GoalsContext] updates.status:", updates.status);
+    console.log("[GoalsContext] user?.id:", user?.id);
+    console.log("[GoalsContext] updatedGoalData?.id:", updatedGoalData?.id);
+    console.log("[GoalsContext] updatedGoalData?.date:", updatedGoalData?.date);
+
+    if (
+      updates.status === "completed" &&
+      user?.id &&
+      updatedGoalData?.id &&
+      updatedGoalData?.date
+    ) {
+      console.log(
+        "[GoalsContext] All conditions met. Proceeding with rewards..."
+      );
+      console.log(
+        "[GoalsContext] Attempting to award base coins for goal ID:",
+        updatedGoalData.id
+      );
+      const baseCoinsAwarded = await awardCoinsForGoalCompletion(
+        user.id,
+        updatedGoalData.id
+      );
+      console.log("[GoalsContext] baseCoinsAwarded result:", baseCoinsAwarded);
+      if (baseCoinsAwarded) {
+        console.log("[GoalsContext] Base coins logic successful.");
+      } else {
+        console.warn(
+          "[GoalsContext] Failed to award base coins. Check UserProfileContext logs."
+        );
+      }
+
+      console.log(
+        "[GoalsContext] Attempting to process streak for goal ID:",
+        updatedGoalData.id,
+        "date:",
+        updatedGoalData.date
+      );
+      const streakProcessed = await processStreakUpdateAndBonus(
+        user.id,
+        updatedGoalData.date,
+        updatedGoalData.id
+      );
+      console.log("[GoalsContext] streakProcessed result:", streakProcessed);
+      if (streakProcessed) {
+        console.log(
+          "[GoalsContext] Streak update and potential bonus processed successfully. Profile has been refreshed."
+        );
+      } else {
+        console.warn(
+          "[GoalsContext] Failed to process streak update/bonus. Check UserProfileContext logs."
+        );
+      }
+    } else {
+      console.log("[GoalsContext] Conditions for rewards NOT met.");
+    }
+    return updatedGoalData || null;
   };
 
   const clearCurrentGoal = () => {
