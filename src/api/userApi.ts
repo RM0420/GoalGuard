@@ -112,7 +112,7 @@ export const awardCoins = async (
   if (amount <= 0) {
     return {
       success: false,
-      error: { message: "Coin amount must be positive." },
+      error: { message: "Coin amount must be positive for this function." },
     };
   }
   if (!transactionType) {
@@ -123,19 +123,24 @@ export const awardCoins = async (
   }
 
   try {
-    const { error } = await supabase.rpc("increment_coin_balance", {
-      user_id_input: userId,
-      amount_input: amount,
-      transaction_type: transactionType,
-      transaction_description: transactionDescription,
-      transaction_related_goal_id:
-        relatedGoalId === undefined ? null : relatedGoalId, // Ensure null is passed if undefined
-    });
+    const { data: newBalance, error } = await supabase.rpc(
+      "handle_coin_transaction",
+      {
+        p_user_id: userId,
+        p_coin_change: amount,
+        p_transaction_type: transactionType,
+        p_description: transactionDescription,
+        p_related_goal_id: relatedGoalId === undefined ? null : relatedGoalId,
+      }
+    );
 
     if (error) {
-      console.error("Error calling increment_coin_balance RPC:", error);
+      console.error("Error calling handle_coin_transaction RPC:", error);
       throw error;
     }
+    console.log(
+      `Coins transaction processed. New balance for user ${userId}: ${newBalance}`
+    );
     return { success: true };
   } catch (error) {
     return { success: false, error };

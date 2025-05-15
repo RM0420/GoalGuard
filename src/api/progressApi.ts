@@ -52,7 +52,7 @@ export const upsertDailyProgress = async (
           // or preserved (for existing rows on update).
         },
         {
-          onConflict: "user_id,date,goal_id", // Assumes a unique constraint on these columns
+          onConflict: "user_id,date", // Assumes a unique constraint on (user_id, date)
           // The default behavior of upsert is to perform an UPDATE if a conflict occurs.
           // If the row does not exist, it performs an INSERT.
         }
