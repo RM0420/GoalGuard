@@ -53,13 +53,23 @@ With the updated tech stack, the app is developed using **React Native with Type
     - Users earn coins for completing daily goals (e.g., 10 coins per day).
     - **Streak Bonus:** Additional coins (e.g., +5 coins per day after a 3-day streak).
   - **Rewards Store:**
+    - Users can spend coins to purchase various rewards. Purchased rewards are added to their inventory for later use.
     - **Skip Day:** 50 coins – Skip a day's goal without breaking the streak.
     - **Streak Saver:** 75 coins – Maintain your streak despite a missed goal.
     - **Goal Reduction:** 30 coins – Temporarily lower the daily goal target.
+  - **User Inventory:** Users can view their purchased and currently held rewards (e.g., "Skip Day" items) in a dedicated inventory section. These items can be activated or used at a later time.
   - **Bonus Challenges:**
     - Randomly triggered challenges (e.g., "Run 7 km instead of 5 km") awarding extra coins (e.g., +20 coins).
   - **Future Social Features:**
     - A friend system to compare streaks and a leaderboard for competitive motivation.
+- **Key Screens/Components:**
+  - **Login/Registration:** Using Supabase Auth for secure authentication.
+  - **Dashboard:** Displays current goal status, progress (from HealthKit), streak, and coin balance.
+  - **Goal Setting:** Interface for defining daily goals and selecting apps to block.
+  - **Progress Tracking:** Visual representation of HealthKit data.
+  - **Rewards Store:** UI for purchasing rewards with coins.
+  - **Inventory Screen:** Displays rewards currently owned by the user.
+  - **Screen Time Setup:** Instructions to help users grant the required permissions.
 
 ---
 
@@ -77,7 +87,8 @@ With the updated tech stack, the app is developed using **React Native with Type
   - **Dashboard:** Displays current goal status, progress (from HealthKit), streak, and coin balance.
   - **Goal Setting:** Interface for defining daily goals and selecting apps to block.
   - **Progress Tracking:** Visual representation of HealthKit data.
-  - **Rewards Store:** UI for redeeming coins on rewards (Skip Day, Streak Saver, Goal Reduction).
+  - **Rewards Store:** UI for purchasing rewards with coins.
+  - **Inventory Screen:** Displays rewards currently owned by the user.
   - **Screen Time Setup:** Instructions to help users grant the required permissions.
 
 ### 3.2 Authentication
@@ -320,6 +331,19 @@ Manages relationships between users for social features.
 - **Primary Key**: `(user_id_1, user_id_2)`
 - **Check Constraint**: `user_id_1 < user_id_2` - Ensures canonical representation of pairs.
 
+### 8.7 `user_owned_rewards` Table
+
+Stores the rewards currently owned by a user and available for use.
+
+- `id`: `UUID` (Primary Key, Default: `gen_random_uuid()`)
+- `user_id`: `UUID` (Foreign Key to `users(id)` ON DELETE CASCADE, NOT NULL)
+- `reward_type`: `TEXT` (ENUM: 'skip_day', 'streak_saver', 'goal_reduction', NOT NULL) - Type of reward owned. This enum should ideally be consistent with transaction types or a dedicated reward type enum.
+- `quantity`: `INTEGER` (NOT NULL, Default: 1, CHECK (`quantity` > 0)) - Number of this reward type owned.
+- `acquired_at`: `TIMESTAMPTZ` (NOT NULL, Default: `NOW()`) - Timestamp of when the first instance of this reward type was acquired or quantity was last incremented.
+- `updated_at`: `TIMESTAMPTZ` (NOT NULL, Default: `NOW()`) - Timestamp of the last update to this record.
+- **Constraint**: `UNIQUE (user_id, reward_type)` - Ensures one row per unique reward type per user, quantity is managed within that row.
+- **RLS**: Enabled, users can only select/update their own owned rewards.
+
 ---
 
 ## 9. Proposed Project Folder Structure (React Native with Expo & TypeScript)
@@ -339,6 +363,7 @@ GoalGuard/
 │ │ ├── goals.tsx # Goal setting and viewing
 │ │ ├── progress.tsx # Detailed progress display
 │ │ ├── rewards-store.tsx
+│ │ ├── inventory.tsx # Screen to display user's owned rewards
 │ │ └── profile.tsx # User profile, settings
 │ ├── modal/ # For modal screens
 │ │ └── screen-time-setup.tsx
@@ -354,12 +379,14 @@ GoalGuard/
 │ ├── api/ # Functions for interacting with Supabase backend
 │ │ ├── goalsApi.ts
 │ │ ├── userApi.ts
-│ │ └── transactionsApi.ts
+│ │ ├── transactionsApi.ts
+│ │ └── inventoryApi.ts
 │ ├── components/ # Reusable UI components (built with React Native Paper)
 │ │ ├── common/ # Generic components (buttons, cards, etc.)
 │ │ ├── auth/ # Auth-specific components
 │ │ ├── goals/ # Goal-related components
-│ │ └── gamification/ # Gamification-related components (e.g., streak display)
+│ │ ├── gamification/ # Gamification-related components (e.g., streak display)
+│ │ └── inventory/ # Components specific to the inventory screen
 │ ├── constants/ # Global constants
 │ │ ├── colors.ts
 │ │ ├── enums.ts # TypeScript enums (GoalType, RewardType, etc.)

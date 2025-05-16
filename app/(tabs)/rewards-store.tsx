@@ -76,11 +76,13 @@ export default function RewardsStoreScreen() {
         console.log(`Purchase successful! New balance: ${result.new_balance}`);
         Alert.alert(
           "Purchase Successful!",
-          `${reward.title} has been purchased. Your new balance is ${result.new_balance} coins.`
+          `${reward.title} has been added to your inventory. Your new balance is ${result.new_balance} coins.`
         );
         await refreshUserProfile(); // Refresh profile to show updated coin balance
 
-        // TODO: Implement reward-specific effects
+        // Reward-specific effects are now handled when the item is used from the inventory
+        // So, the switch statement below can be removed or commented out.
+        /*
         switch (reward.id) {
           case "skip_day":
             console.log(
@@ -102,6 +104,7 @@ export default function RewardsStoreScreen() {
           default:
             break;
         }
+        */
       } else {
         console.log(`Purchase failed: ${result.message}`);
         Alert.alert(

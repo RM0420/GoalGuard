@@ -2,6 +2,7 @@ import React from "react";
 import { Tabs } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons"; // Or any icon pack you prefer
 import { useAuth } from "../../src/contexts/AuthContext";
+import { useTheme } from "react-native-paper";
 
 /**
  * `TabLayout` defines the main tab-based navigation for the authenticated part of the app.
@@ -65,8 +66,27 @@ export default function TabLayout() {
         options={{
           title: "Store",
           tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="store" color={color} size={size} />
+            <MaterialCommunityIcons
+              name="storefront-outline"
+              color={color}
+              size={size}
+            />
           ),
+          headerShown: false,
+        }}
+      />
+      <Tabs.Screen
+        name="inventory"
+        options={{
+          title: "Inventory",
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons
+              name="briefcase-outline"
+              color={color}
+              size={size}
+            />
+          ),
+          headerShown: false, // The inventory screen has its own Appbar
         }}
       />
       <Tabs.Screen
