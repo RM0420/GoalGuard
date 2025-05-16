@@ -9,21 +9,30 @@ import {
 } from "react-native-paper";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { useUserProfile } from "../../src/contexts/UserProfileContext";
-import { useGoals } from "../../src/contexts/GoalsContext";
+import { getActiveGoal } from "../../src/api/goalsApi";
 import useHealthKit from "../../src/hooks/useHealthKit";
-import { Goal } from "../../src/types/database.types";
-import { upsertDailyProgress } from "../../src/api/progressApi";
+import { Database } from "../../src/types/database.types";
+import {
+  upsertDailyProgress,
+  UpsertDailyProgressData,
+} from "../../src/api/progressApi";
+
+type Goal = Database["public"]["Tables"]["goals"]["Row"];
+type DailyProgressStatus = "pending" | "completed" | "failed" | "skipped";
 
 /**
  * `DashboardScreen` is the main screen users see after logging in.
- * It displays a summary of their goal progress, streaks, and coin balance.
+ * It displays a summary of their active goal, daily progress, streaks, and coin balance.
  * @returns {JSX.Element} The dashboard screen component.
  */
 export default function DashboardScreen() {
   const { user, signOut } = useAuth();
   const { profile, loadingProfile, refreshUserProfile } = useUserProfile();
-  const { currentDailyGoal, isLoadingGoal, updateCurrentDailyGoal } =
-    useGoals();
+
+  const [activeGoal, setActiveGoal] = useState<Goal | null | undefined>(
+    undefined
+  );
+  const [isLoadingActiveGoal, setIsLoadingActiveGoal] = useState<boolean>(true);
 
   const {
     steps,
@@ -35,13 +44,44 @@ export default function DashboardScreen() {
     fetchDailyHealthData,
   } = useHealthKit();
 
-  const [mockGoalProgressText, setMockGoalProgressText] = useState<string>("");
-  const [isMockGoalMet, setIsMockGoalMet] = useState<boolean>(false);
+  const [dailyProgressText, setDailyProgressText] = useState<string>("");
+  const [isTodayGoalMet, setIsTodayGoalMet] = useState<boolean>(false);
+  const [currentDailyStatus, setCurrentDailyStatus] =
+    useState<DailyProgressStatus>("pending");
+
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState("");
 
   const lastSavedSteps = useRef<number | undefined>(undefined);
   const lastSavedDistance = useRef<number | undefined>(undefined);
+  const lastSavedStatus = useRef<DailyProgressStatus | undefined>(undefined);
+
+  const getTodayDateString = () => {
+    return new Date().toISOString().split("T")[0];
+  };
+
+  useEffect(() => {
+    if (user) {
+      setIsLoadingActiveGoal(true);
+      getActiveGoal(user)
+        .then(({ data, error }) => {
+          if (error) {
+            setSnackbarMessage("Error fetching your active goal.");
+            setSnackbarVisible(true);
+            console.error("Error fetching active goal:", error);
+            setActiveGoal(null);
+          } else {
+            setActiveGoal(data);
+          }
+        })
+        .finally(() => {
+          setIsLoadingActiveGoal(false);
+        });
+    } else {
+      setActiveGoal(null);
+      setIsLoadingActiveGoal(false);
+    }
+  }, [user]);
 
   useEffect(() => {
     if (!hasPermissions) {
@@ -68,141 +108,180 @@ export default function DashboardScreen() {
   }, [healthError]);
 
   useEffect(() => {
-    if (!currentDailyGoal || isLoadingHealthData) {
-      setMockGoalProgressText("");
-      setIsMockGoalMet(false);
+    if (!activeGoal || isLoadingHealthData) {
+      setDailyProgressText(
+        activeGoal ? "Loading health data..." : "No active goal set."
+      );
+      setIsTodayGoalMet(false);
+      setCurrentDailyStatus("pending");
       return;
     }
 
     let progressText = "";
     let currentTargetMet = false;
     let percentage = 0;
+    let determinedStatus: DailyProgressStatus = "pending";
 
-    if (currentDailyGoal.goal_type === "steps" && steps !== undefined) {
-      if (currentDailyGoal.target_value > 0) {
-        currentTargetMet = steps >= currentDailyGoal.target_value;
-        percentage = Math.min(
-          100,
-          Math.floor((steps / currentDailyGoal.target_value) * 100)
-        );
-        progressText = currentTargetMet
-          ? "Goal Met (Health Data)!"
-          : `${percentage}% of target (Health Data).`;
-      }
-    } else if (
-      currentDailyGoal.goal_type === "run_distance" &&
-      distance !== undefined
+    if (
+      activeGoal.goal_type === "steps" &&
+      steps !== undefined &&
+      activeGoal.target_value !== null &&
+      activeGoal.target_value > 0
     ) {
-      if (
-        currentDailyGoal.target_unit === "km" &&
-        currentDailyGoal.target_value > 0
-      ) {
-        currentTargetMet = distance >= currentDailyGoal.target_value;
+      currentTargetMet = steps >= activeGoal.target_value;
+      percentage = Math.min(
+        100,
+        Math.floor((steps / activeGoal.target_value) * 100)
+      );
+      progressText = `${steps} / ${activeGoal.target_value} steps (${percentage}%)`;
+      determinedStatus = currentTargetMet ? "completed" : "pending";
+    } else if (
+      activeGoal.goal_type === "run_distance" &&
+      distance !== undefined &&
+      activeGoal.target_value !== null &&
+      activeGoal.target_unit &&
+      activeGoal.target_value > 0
+    ) {
+      if (activeGoal.target_unit === "km") {
+        currentTargetMet = distance >= activeGoal.target_value;
         percentage = Math.min(
           100,
-          Math.floor((distance / currentDailyGoal.target_value) * 100)
+          Math.floor((distance / activeGoal.target_value) * 100)
         );
-        progressText = currentTargetMet
-          ? "Goal Met (Health Data)!"
-          : `${percentage}% of target (Health Data).`;
-      } else if (currentDailyGoal.target_unit !== "km") {
-        progressText = `(Target unit ${currentDailyGoal.target_unit} not yet fully supported for distance progress text)`;
+        progressText = `${distance.toFixed(2)} / ${
+          activeGoal.target_value
+        } km (${percentage}%)`;
+        determinedStatus = currentTargetMet ? "completed" : "pending";
+      } else if (activeGoal.target_unit === "miles") {
+        const distanceInMiles = distance * 0.621371;
+        currentTargetMet = distanceInMiles >= activeGoal.target_value;
+        percentage = Math.min(
+          100,
+          Math.floor((distanceInMiles / activeGoal.target_value) * 100)
+        );
+        progressText = `${distanceInMiles.toFixed(2)} / ${
+          activeGoal.target_value
+        } miles (${percentage}%) (Health data in km, converted)`;
+        determinedStatus = currentTargetMet ? "completed" : "pending";
+      } else {
+        progressText = `(Target unit ${activeGoal.target_unit} not fully supported for direct comparison)`;
+        determinedStatus = "pending";
       }
+    } else {
+      progressText =
+        "Goal type or target not properly set, or health data unavailable.";
+      determinedStatus = "pending";
     }
 
-    setMockGoalProgressText(progressText);
-    setIsMockGoalMet(currentTargetMet);
-  }, [currentDailyGoal, steps, distance, isLoadingHealthData]);
+    setDailyProgressText(progressText);
+    setIsTodayGoalMet(currentTargetMet);
+    setCurrentDailyStatus(determinedStatus);
+  }, [activeGoal, steps, distance, isLoadingHealthData]);
 
   useEffect(() => {
-    const saveProgress = async () => {
-      if (user?.id && currentDailyGoal?.id && currentDailyGoal.date) {
-        const WiggleRoomSteps = 10;
-        const WiggleRoomDistance = 0.1;
+    const saveDailyProgressToSupabase = async () => {
+      if (
+        !user?.id ||
+        !activeGoal?.id ||
+        (steps === undefined && distance === undefined)
+      ) {
+        return;
+      }
 
-        const stepsChanged =
-          steps !== undefined &&
-          (lastSavedSteps.current === undefined ||
-            Math.abs(steps - (lastSavedSteps.current || 0)) > WiggleRoomSteps);
-        const distanceChanged =
-          distance !== undefined &&
-          (lastSavedDistance.current === undefined ||
-            Math.abs(distance - (lastSavedDistance.current || 0)) >
-              WiggleRoomDistance);
+      const today = getTodayDateString();
+      const currentStatusToSave = currentDailyStatus;
 
-        if (
-          (steps !== undefined || distance !== undefined) &&
-          (stepsChanged || distanceChanged)
-        ) {
-          const progressDataPayload: {
-            steps_count?: number;
-            distance_ran_km?: number;
-          } = {};
-          if (steps !== undefined) {
-            progressDataPayload.steps_count = steps;
-          }
-          if (distance !== undefined) {
-            progressDataPayload.distance_ran_km = distance;
-          }
+      const WiggleRoomSteps = 10;
+      const WiggleRoomDistance = 0.1;
 
-          if (Object.keys(progressDataPayload).length > 0) {
-            console.log(
-              "Dashboard: Attempting to save daily progress to Supabase:",
-              progressDataPayload
-            );
-            const result = await upsertDailyProgress({
-              user_id: user.id,
-              goal_id: currentDailyGoal.id,
-              date: currentDailyGoal.date,
-              progress_data: progressDataPayload,
-            });
+      const stepsChangedSignificantly =
+        steps !== undefined &&
+        (lastSavedSteps.current === undefined ||
+          Math.abs(steps - (lastSavedSteps.current || 0)) > WiggleRoomSteps);
 
-            if (result) {
-              console.log(
-                "Dashboard: Successfully saved daily progress.",
-                result
-              );
-              setSnackbarMessage("Health progress synced!");
-              setSnackbarVisible(true);
-              if (steps !== undefined) lastSavedSteps.current = steps;
-              if (distance !== undefined) lastSavedDistance.current = distance;
-            } else {
-              console.error("Dashboard: Failed to save daily progress.");
-              setSnackbarMessage(
-                "Failed to sync health progress. Please try again."
-              );
-              setSnackbarVisible(true);
-            }
-          }
+      const distanceChangedSignificantly =
+        distance !== undefined &&
+        (lastSavedDistance.current === undefined ||
+          Math.abs(distance - (lastSavedDistance.current || 0)) >
+            WiggleRoomDistance);
+
+      const statusChanged = currentStatusToSave !== lastSavedStatus.current;
+
+      if (
+        stepsChangedSignificantly ||
+        distanceChangedSignificantly ||
+        statusChanged
+      ) {
+        const progressDataPayload: {
+          steps_count?: number;
+          distance_ran_km?: number;
+        } = {};
+        if (steps !== undefined) {
+          progressDataPayload.steps_count = steps;
+        }
+        if (distance !== undefined) {
+          progressDataPayload.distance_ran_km = distance;
+        }
+
+        if (Object.keys(progressDataPayload).length === 0 && !statusChanged) {
+          if (!statusChanged) return;
+        }
+
+        const upsertPayload: UpsertDailyProgressData = {
+          user_id: user.id,
+          goal_id: activeGoal.id,
+          date: today,
+          progress_data: progressDataPayload,
+          status: currentStatusToSave,
+        };
+
+        console.log(
+          "Dashboard: PRE-CALL upsertPayload:",
+          JSON.stringify(upsertPayload)
+        );
+        console.log(
+          "Dashboard: PRE-CALL currentStatusToSave value:",
+          currentStatusToSave
+        );
+
+        const result = await upsertDailyProgress(upsertPayload);
+
+        if (result) {
+          console.log(
+            "Dashboard: Successfully upserted daily progress.",
+            result
+          );
+          setSnackbarMessage("Daily progress synced!");
+          setSnackbarVisible(true);
+          if (steps !== undefined) lastSavedSteps.current = steps;
+          if (distance !== undefined) lastSavedDistance.current = distance;
+          lastSavedStatus.current = currentStatusToSave;
+        } else {
+          console.error("Dashboard: Failed to upsert daily progress.");
+          setSnackbarMessage(
+            "Failed to sync daily progress. Please check connection."
+          );
+          setSnackbarVisible(true);
         }
       }
     };
 
-    saveProgress();
-  }, [user, currentDailyGoal, steps, distance]);
-
-  const handleMarkGoalCompleted = async () => {
-    if (currentDailyGoal && currentDailyGoal.id && user?.id) {
-      await updateCurrentDailyGoal(currentDailyGoal.id, {
-        status: "completed",
-      });
-    }
-  };
+    saveDailyProgressToSupabase();
+  }, [user, activeGoal, steps, distance, currentDailyStatus]);
 
   const handleRequestPermissionsAndFetchData = useCallback(async () => {
-    console.log(
-      "Dashboard: Manually requesting permissions and fetching data."
-    );
     const granted = await requestPermissions();
     if (!granted) {
       setSnackbarMessage(
         "Health permissions are required to track progress automatically."
       );
       setSnackbarVisible(true);
+    } else {
+      fetchDailyHealthData();
     }
-  }, [requestPermissions]);
+  }, [requestPermissions, fetchDailyHealthData]);
 
-  if (loadingProfile) {
+  if (loadingProfile || isLoadingActiveGoal) {
     return (
       <View style={styles.centered}>
         <ActivityIndicator animating={true} size="large" />
@@ -218,7 +297,7 @@ export default function DashboardScreen() {
       </Text>
 
       <Card style={styles.card}>
-        <Card.Title title="Stats Summary" />
+        <Card.Title title="My Stats" />
         <Card.Content>
           <Text variant="bodyLarge">
             Coins: {profile?.coin_balance ?? "N/A"}
@@ -230,109 +309,91 @@ export default function DashboardScreen() {
       </Card>
 
       <Card style={styles.card}>
-        <Card.Title title="Today's Goal & Progress" />
+        <Card.Title title="Active Goal & Today's Progress" />
         <Card.Content>
-          {isLoadingGoal && !currentDailyGoal ? (
+          {isLoadingActiveGoal && activeGoal === undefined ? (
             <ActivityIndicator animating={true} />
-          ) : currentDailyGoal ? (
+          ) : activeGoal ? (
             <>
-              <Text variant="bodyLarge">
-                Type: {currentDailyGoal.goal_type}
+              <Text variant="titleMedium" style={styles.goalTitle}>
+                Your Goal:{" "}
+                {activeGoal.goal_type === "steps" ? "Walk/Run" : "Run"}{" "}
+                {activeGoal.target_value} {activeGoal.target_unit}
               </Text>
-              <Text variant="bodyLarge">
-                Target: {currentDailyGoal.target_value}{" "}
-                {currentDailyGoal.target_unit}
-              </Text>
-              <Text variant="bodyLarge">Status: {currentDailyGoal.status}</Text>
-
-              <Text variant="bodyMedium" style={styles.progressTitle}>
-                Today's Progress (Health Data):
-              </Text>
-              {isLoadingHealthData ? (
-                <ActivityIndicator animating={true} size="small" />
-              ) : (
-                <>
-                  <Text variant="bodySmall">
-                    Steps: {steps !== undefined ? steps : "N/A"}
-                  </Text>
-                  <Text variant="bodySmall">
-                    Distance:{" "}
-                    {distance !== undefined ? `${distance} km` : "N/A"}
-                  </Text>
-                  {healthError && (
-                    <Text style={{ color: "red" }}>
-                      Error: {healthError.message}
-                    </Text>
-                  )}
-                  {mockGoalProgressText ? (
-                    <Text
-                      variant="labelLarge"
-                      style={
-                        isMockGoalMet
-                          ? styles.goalMetText
-                          : styles.goalProgressText
-                      }
-                    >
-                      {mockGoalProgressText}
-                    </Text>
-                  ) : (
-                    !isLoadingHealthData &&
-                    !healthError &&
-                    currentDailyGoal && <Text>Calculating progress...</Text>
-                  )}
-                </>
-              )}
-              {!hasPermissions && (
-                <Button
-                  mode="outlined"
-                  onPress={handleRequestPermissionsAndFetchData}
-                  style={styles.button}
-                  icon="heart-pulse"
+              <Text variant="bodyLarge" style={styles.progressHeader}>
+                Today's Status:
+                <Text
+                  style={{
+                    fontWeight: isTodayGoalMet ? "bold" : "normal",
+                    color: isTodayGoalMet ? "green" : "orange",
+                  }}
                 >
-                  Connect to Health Data
-                </Button>
-              )}
+                  {isTodayGoalMet
+                    ? " Goal Met!"
+                    : currentDailyStatus === "pending"
+                    ? " In Progress"
+                    : " Pending Data"}
+                </Text>
+              </Text>
+              <Text variant="bodyMedium" style={styles.progressDetails}>
+                Progress:{" "}
+                {isLoadingHealthData
+                  ? "Fetching health data..."
+                  : dailyProgressText}
+              </Text>
+              {activeGoal.apps_to_block &&
+                (activeGoal.apps_to_block as string[]).length > 0 && (
+                  <Text variant="bodySmall" style={styles.appsBlockedText}>
+                    Apps to block if goal not met:{" "}
+                    {(activeGoal.apps_to_block as string[]).join(", ")}
+                  </Text>
+                )}
             </>
           ) : (
-            <Text>No goal set for today. Go to the Goals tab to set one!</Text>
+            <Text>
+              No active daily goal set. Go to the Goals tab to set one!
+            </Text>
           )}
         </Card.Content>
       </Card>
 
-      {currentDailyGoal && currentDailyGoal.status === "pending" && (
-        <Button
-          mode="elevated"
-          onPress={handleMarkGoalCompleted}
-          style={styles.button}
-          icon="check-circle"
-          disabled={isLoadingGoal || isLoadingHealthData}
-        >
-          Mark Goal Completed (Test)
-        </Button>
+      {!hasPermissions && (
+        <Card style={styles.cardWarning}>
+          <Card.Content>
+            <Text style={styles.warningText}>
+              HealthKit permissions are not granted. Progress cannot be tracked
+              automatically.
+            </Text>
+            <Button
+              mode="contained"
+              onPress={handleRequestPermissionsAndFetchData}
+              style={styles.button}
+            >
+              Grant Permissions
+            </Button>
+          </Card.Content>
+        </Card>
       )}
 
       <Button
-        onPress={async () => {
-          await refreshUserProfile();
-          if (hasPermissions) await fetchDailyHealthData();
-        }}
+        onPress={refreshUserProfile}
         style={styles.button}
         mode="outlined"
       >
-        Refresh Dashboard
+        Refresh Stats
       </Button>
-
-      <Button onPress={signOut} style={styles.button} mode="contained">
+      <Button
+        onPress={() => signOut()}
+        style={styles.button}
+        mode="outlined"
+        textColor="red"
+      >
         Sign Out
       </Button>
       <Snackbar
         visible={snackbarVisible}
         onDismiss={() => setSnackbarVisible(false)}
-        duration={Snackbar.DURATION_MEDIUM}
-        action={{
-          label: "Dismiss",
-          onPress: () => setSnackbarVisible(false),
-        }}
+        duration={Snackbar.DURATION_SHORT}
       >
         {snackbarMessage}
       </Snackbar>
@@ -343,40 +404,50 @@ export default function DashboardScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 20,
-    backgroundColor: "#f5f5f5",
   },
   centered: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#f5f5f5",
-  },
-  title: {
-    marginBottom: 20,
-    textAlign: "center",
-  },
-  card: {
-    marginBottom: 20,
-  },
-  button: {
-    marginTop: 15,
+    padding: 20,
   },
   loadingText: {
     marginTop: 10,
+    fontSize: 16,
   },
-  progressTitle: {
-    marginTop: 15,
-    marginBottom: 5,
+  title: {
+    marginBottom: 16,
+    textAlign: "center",
+  },
+  card: {
+    marginBottom: 16,
+  },
+  cardWarning: {
+    marginBottom: 16,
+    backgroundColor: "#fff3e0",
+  },
+  warningText: {
+    color: "#e65100",
+    marginBottom: 10,
+  },
+  button: {
+    marginTop: 10,
+  },
+  goalTitle: {
+    marginBottom: 8,
+  },
+  progressHeader: {
+    marginTop: 8,
+    marginBottom: 4,
     fontWeight: "bold",
   },
-  goalMetText: {
-    marginTop: 5,
-    color: "green",
-    fontWeight: "bold",
+  progressDetails: {
+    marginBottom: 8,
+    color: "#555",
   },
-  goalProgressText: {
-    marginTop: 5,
-    color: "#666",
+  appsBlockedText: {
+    fontSize: 12,
+    color: "#777",
+    fontStyle: "italic",
   },
 });

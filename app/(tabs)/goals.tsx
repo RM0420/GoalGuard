@@ -10,18 +10,16 @@ import {
   Divider,
 } from "react-native-paper";
 import { useAuth } from "../../src/contexts/AuthContext";
-import { useGoals } from "../../src/contexts/GoalsContext";
-import { CreateGoalData, UpdateGoalData } from "../../src/api/goalsApi"; // Ensure this path is correct
+import { getActiveGoal, setGoal, SetGoalData } from "../../src/api/goalsApi";
+import { Database } from "../../src/types/database.types"; // For Goal type
+
+// Define Goal type based on Supabase schema
+type Goal = Database["public"]["Tables"]["goals"]["Row"];
 
 /**
- * `GoalsScreen` - Placeholder for goal setting and viewing.
+ * `GoalsScreen` - Allows users to set or update their daily physical goal.
  * @returns {JSX.Element}
  */
-
-// Utility to get today's date in YYYY-MM-DD format
-const getTodayDateString = () => {
-  return new Date().toISOString().split("T")[0];
-};
 
 // Define available goal types and their units
 const GOAL_TYPES = {
@@ -32,13 +30,13 @@ const GOAL_TYPES = {
 
 export default function GoalsScreen() {
   const { user } = useAuth();
-  const {
-    currentDailyGoal,
-    isLoadingGoal,
-    setCurrentDailyGoal,
-    updateCurrentDailyGoal,
-    fetchCurrentDailyGoal, // Added to refresh if needed
-  } = useGoals();
+
+  // State for the active goal and loading/submitting states
+  const [activeGoal, setActiveGoal] = useState<Goal | null | undefined>(
+    undefined
+  ); // undefined: not yet loaded, null: loaded and no active goal
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   // Form state
   const [selectedGoalTypeKey, setSelectedGoalTypeKey] =
@@ -49,40 +47,71 @@ export default function GoalsScreen() {
   );
   const [appsToBlockInput, setAppsToBlockInput] = useState<string>(""); // Comma-separated string
 
-  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-  const [formMode, setFormMode] = useState<"create" | "edit">("create");
+  // Determine form mode based on whether an active goal exists
+  const formMode = activeGoal ? "edit" : "create";
 
+  // Effect to fetch active goal on load or user change
   useEffect(() => {
-    if (currentDailyGoal) {
-      setFormMode("edit");
+    if (user) {
+      setIsLoading(true);
+      getActiveGoal(user)
+        .then(({ data, error }) => {
+          if (error) {
+            Alert.alert("Error", "Could not fetch your active goal.");
+            console.error("Error fetching active goal:", error);
+            setActiveGoal(null); // Assume no goal if error
+          } else {
+            setActiveGoal(data); // data can be Goal or null
+          }
+        })
+        .finally(() => {
+          setIsLoading(false);
+        });
+    } else {
+      setActiveGoal(null); // No user, no goal
+      setIsLoading(false);
+    }
+  }, [user]);
+
+  // Effect to populate form when activeGoal state changes
+  useEffect(() => {
+    if (activeGoal) {
       const typeKey = Object.keys(GOAL_TYPES).find(
         (key) =>
           GOAL_TYPES[key as keyof typeof GOAL_TYPES].label
             .toLowerCase()
-            .replace(/ /g, "_") === currentDailyGoal.goal_type || // Backward compatibility or direct match
-          key === currentDailyGoal.goal_type // Direct key match
+            .replace(/ /g, "_") === activeGoal.goal_type ||
+          key === activeGoal.goal_type
       ) as keyof typeof GOAL_TYPES | undefined;
 
       if (typeKey) setSelectedGoalTypeKey(typeKey);
       else setSelectedGoalTypeKey("steps"); // Default if type not found
 
-      setTargetValue(currentDailyGoal.target_value.toString());
-      setSelectedUnit(currentDailyGoal.target_unit);
-      setAppsToBlockInput((currentDailyGoal.apps_to_block || []).join(", "));
+      setTargetValue(activeGoal.target_value?.toString() || "");
+      setSelectedUnit(
+        activeGoal.target_unit || GOAL_TYPES[selectedGoalTypeKey].units[0]
+      );
+      // Ensure apps_to_block is an array before joining, default to empty string
+      const apps = Array.isArray(activeGoal.apps_to_block)
+        ? activeGoal.apps_to_block.join(", ")
+        : "";
+      setAppsToBlockInput(apps);
     } else {
-      setFormMode("create");
-      // Reset form for new goal entry if no current goal
+      // Reset form for new goal entry if no active goal
       setSelectedGoalTypeKey("steps");
       setTargetValue("");
       setSelectedUnit(GOAL_TYPES.steps.units[0]);
       setAppsToBlockInput("");
     }
-  }, [currentDailyGoal]);
+  }, [activeGoal, selectedGoalTypeKey]); // Added selectedGoalTypeKey to deps for unit reset on type change with no activeGoal
 
   // Update available units when goal type changes
   useEffect(() => {
-    setSelectedUnit(GOAL_TYPES[selectedGoalTypeKey].units[0]);
-  }, [selectedGoalTypeKey]);
+    // Only reset if not driven by activeGoal's initial population
+    if (!activeGoal || selectedGoalTypeKey !== activeGoal.goal_type) {
+      setSelectedUnit(GOAL_TYPES[selectedGoalTypeKey].units[0]);
+    }
+  }, [selectedGoalTypeKey, activeGoal]);
 
   const handleSaveGoal = async () => {
     if (!user) {
@@ -108,41 +137,53 @@ export default function GoalsScreen() {
       .map((app) => app.trim())
       .filter((app) => app !== "");
 
-    const goalPayload = {
-      goal_type: selectedGoalTypeKey, // Store the key like 'steps' or 'run_distance'
+    // Prepare payload for setGoal (persistent goal, no date)
+    const goalPayload: SetGoalData = {
+      goal_type: selectedGoalTypeKey,
       target_value: parseInt(targetValue, 10),
       target_unit: selectedUnit,
-      date: getTodayDateString(), // Goal is always for today on this screen
       apps_to_block: appsArray.length > 0 ? appsArray : null,
+      // Removed date field
     };
 
-    let success = false;
-    if (formMode === "create") {
-      const createdGoal = await setCurrentDailyGoal(
-        goalPayload as CreateGoalData
+    const { data: newGoal, error } = await setGoal(user, goalPayload);
+
+    if (error) {
+      Alert.alert(
+        "Error",
+        `Failed to ${formMode === "edit" ? "update" : "set"} goal. ${
+          error.message || ""
+        }`
       );
-      success = !!createdGoal;
-    } else if (formMode === "edit" && currentDailyGoal?.id) {
-      const updatedGoal = await updateCurrentDailyGoal(
-        currentDailyGoal.id,
-        goalPayload as UpdateGoalData
+      console.error(
+        `Error ${formMode === "edit" ? "updating" : "setting"} goal:`,
+        error
       );
-      success = !!updatedGoal;
+    } else if (newGoal) {
+      Alert.alert(
+        "Success",
+        `Goal successfully ${formMode === "edit" ? "updated" : "set"}!`
+      );
+      setActiveGoal(newGoal); // Update local state with the new/updated goal
+      // Optionally, could re-fetch with getActiveGoal(user) for absolute certainty
+    } else {
+      Alert.alert(
+        "Error",
+        `Failed to ${
+          formMode === "edit" ? "update" : "set"
+        } goal. No data returned.`
+      );
     }
 
-    if (success && user) {
-      // Optionally, refresh explicitly, though context should update state
-      // await fetchCurrentDailyGoal(user, getTodayDateString());
-    }
     setIsSubmitting(false);
   };
 
-  if (isLoadingGoal && !currentDailyGoal) {
-    // Show loading only if no goal is displayed yet
+  if (isLoading || activeGoal === undefined) {
+    // Show loading if fetching or activeGoal is not yet determined
     return (
       <View style={styles.centered}>
         <ActivityIndicator animating={true} size="large" />
-        <Text>Loading goal...</Text>
+        <Text>Loading your goal...</Text>
       </View>
     );
   }
@@ -154,7 +195,7 @@ export default function GoalsScreen() {
     >
       <Card style={styles.card}>
         <Card.Title
-          title={formMode === "edit" ? "Edit Today's Goal" : "Set Today's Goal"}
+          title={formMode === "edit" ? "Edit Daily Goal" : "Set Daily Goal"}
         />
         <Card.Content>
           <Text variant="titleMedium" style={styles.label}>
@@ -217,28 +258,12 @@ export default function GoalsScreen() {
           <Button
             mode="contained"
             onPress={handleSaveGoal}
-            loading={isSubmitting || isLoadingGoal} // Also show loading if context is still fetching
-            disabled={isSubmitting || isLoadingGoal}
+            loading={isSubmitting || isLoading}
+            disabled={isSubmitting || isLoading}
             style={styles.button}
           >
             {formMode === "edit" ? "Update Goal" : "Set Goal"}
           </Button>
-          {formMode === "edit" && currentDailyGoal && (
-            <Button
-              mode="outlined"
-              onPress={() => {
-                /* TODO: Implement delete or clear goal */ Alert.alert(
-                  "Not Implemented",
-                  "Delete/clear goal functionality to be added."
-                );
-              }}
-              disabled={isSubmitting || isLoadingGoal}
-              style={styles.button}
-              textColor="red"
-            >
-              Delete Goal (Not Implemented)
-            </Button>
-          )}
         </Card.Content>
       </Card>
     </ScrollView>

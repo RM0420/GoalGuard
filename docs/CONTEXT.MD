@@ -26,7 +26,7 @@ With the updated tech stack, the app is developed using **React Native with Type
 - **Details:**
   - A simple, intuitive UI (built with React Native Paper) allows users to input their daily goal.
   - Only physical goals are supported at launch.
-  - Goals reset daily; users are prompted to set a new target each day.
+  - Users set a daily physical goal that persists day-to-day. They can modify this goal at any time, and the new goal will become their active daily target.
   - Users can select which apps to block via the Screen Time API if the goal is not met.
 
 ### 2.3 Progress Tracking
@@ -125,13 +125,13 @@ With the updated tech stack, the app is developed using **React Native with Type
 1. **User Authentication:**
    - Users register or log in via Supabase Auth; a unique user ID is available within the Supabase session.
 2. **Goal Setting:**
-   - Users define their daily physical goal and choose apps to block.
-   - Goal data is stored in Supabase.
+   - Users define their persistent daily physical goal and choose apps to block. This goal remains active until explicitly changed.
+   - Goal data, including its active status, is stored in Supabase.
 3. **Progress Tracking:**
    - HealthKit collects physical activity data.
    - Data is sent to Supabase for real-time progress display and validation.
 4. **Daily Check at 12:00 AM:**
-   - An Edge Function checks if the previous day's goal was met.
+   - An Edge Function checks if the previous day's daily target (based on the user's active persistent goal) was met.
    - If the goal is unmet, the Screen Time API is activated to block the chosen apps.
 5. **Gamification:**
    - Upon successful goal completion, coins are awarded and streaks are updated.
@@ -274,12 +274,11 @@ Stores information about the daily goals set by users.
 - `goal_type`: `TEXT` (e.g., 'steps', 'run_distance') - Type of physical activity.
 - `target_value`: `INTEGER` - The numeric target for the goal (e.g., 10000 for steps).
 - `target_unit`: `TEXT` (e.g., 'steps', 'km') - Unit for the target value.
-- `date`: `DATE` - The specific day this goal is for.
-- `status`: `TEXT` (ENUM: 'pending', 'completed', 'failed', 'skipped', Default: 'pending') - Current status of the goal.
 - `apps_to_block`: `JSONB` (Array of strings, e.g., `["com.instagram.ios", "com.facebook.Facebook"]`) - List of app bundle identifiers to be blocked if the goal is not met.
+- `is_active`: `BOOLEAN` (Default: `true`) - Indicates if this is the user's current active goal.
 - `created_at`: `TIMESTAMPTZ` (Default: `NOW()`)
 - `updated_at`: `TIMESTAMPTZ` (Default: `NOW()`)
-- **Constraint**: `UNIQUE (user_id, date)` - Ensures a user can only have one goal per day.
+- **Constraint**: A user can only have one active goal. This can be enforced by application logic or a partial unique index (e.g., in PostgreSQL: `CREATE UNIQUE INDEX one_active_goal_per_user ON goals (user_id) WHERE is_active IS TRUE;`). When a new goal is set, previous active goals for the user should be marked as `is_active = false`.
 
 ### 8.4 `daily_progress` Table
 
@@ -287,12 +286,13 @@ Tracks the user's progress towards their daily goal, typically synced from Healt
 
 - `id`: `UUID` (Primary Key, Default: `gen_random_uuid()`)
 - `user_id`: `UUID` (Foreign Key to `users(id)` ON DELETE CASCADE)
-- `goal_id`: `UUID` (Foreign Key to `goals(id)` ON DELETE CASCADE) - Links progress to a specific goal.
-- `date`: `DATE` - The date of this progress entry (should match `goals.date`).
-- `progress_data`: `JSONB` (e.g., `{"steps_count": 7500, "distance_ran_km": 4.5}`) - Flexible field to store various progress metrics.
+- `goal_id`: `UUID` (Foreign Key to `goals(id)` ON DELETE CASCADE) - Links to the `goals` record that was active for the user on this specific `date`.
+- `date`: `DATE` - The specific day this progress entry is for.
+- `progress_data`: `JSONB` (e.g., `{"steps_count": 7500, "distance_ran_km": 4.5}`) - Flexible field to store various progress metrics achieved on this `date`.
+- `status`: `TEXT` (ENUM: 'pending', 'completed', 'failed', 'skipped', Default: 'pending') - Status of the goal's completion for this specific `date`.
 - `last_fetched_from_healthkit`: `TIMESTAMPTZ` - Timestamp of the last sync with HealthKit.
 - `created_at`: `TIMESTAMPTZ` (Default: `NOW()`)
-- **Constraint**: `UNIQUE (goal_id)` or `UNIQUE (user_id, date)` - Ensures one progress entry per goal/day.
+- **Constraint**: `UNIQUE (user_id, date)` - Ensures one progress entry per user per day.
 
 ### 8.5 `coin_transactions` Table
 
