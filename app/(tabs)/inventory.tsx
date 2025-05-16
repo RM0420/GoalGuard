@@ -14,7 +14,12 @@ import {
   Paragraph,
 } from "react-native-paper";
 import { useFocusEffect } from "expo-router";
-import { fetchUserInventory } from "../../src/api/inventoryApi";
+import {
+  fetchUserInventory,
+  useInventoryItem,
+  UseRewardPayload,
+  ActiveRewardType as ApiActiveRewardType,
+} from "../../src/api/inventoryApi";
 import {
   UserOwnedReward,
   MappedUserOwnedReward,
@@ -69,6 +74,10 @@ export default function InventoryScreen() {
   const [isUsingItem, setIsUsingItem] = useState<string | null>(null); // Stores ID of item being used
   const [refreshing, setRefreshing] = useState(false);
 
+  // Ensure local ActiveRewardType (from src/types/inventory.types) is compatible
+  // or use ApiActiveRewardType directly if suitable for getRewardDisplayProperties.
+  // For now, we assume MappedUserOwnedReward.reward_type can be cast to ApiActiveRewardType for valid items.
+
   const loadInventory = useCallback(async () => {
     if (!user) {
       setInventory([]);
@@ -108,35 +117,47 @@ export default function InventoryScreen() {
       return;
     }
 
+    // Cast to the API's expected type for active rewards.
+    // This also implicitly filters out trying to "use" a streak_saver here.
+    const rewardTypeApi = item.reward_type as ApiActiveRewardType;
+
+    if (rewardTypeApi !== "skip_day" && rewardTypeApi !== "goal_reduction") {
+      Alert.alert(
+        "Info",
+        "This item works automatically or cannot be used directly."
+      );
+      setIsUsingItem(null);
+      return;
+    }
+
     setIsUsingItem(item.id);
     console.log(
-      `Attempting to use item: ${item.title} (ID: ${item.id}, Type: ${item.reward_type})`
+      `Attempting to use item: ${item.title} (ID: ${item.id}, Type: ${rewardTypeApi})`
     );
 
-    // TODO: Implement actual item usage logic
-    // This would involve:
-    // 1. Calling a Supabase RPC function (e.g., `use_reward_item`)
-    //    - This RPC would decrement the quantity in `user_owned_rewards` (or delete if quantity becomes 0).
-    //    - It would also apply the reward's effect (e.g., update a goal, set a flag on user_profile_and_stats).
-    // 2. After the RPC call, refresh the inventory and user profile (if effects change it, e.g. streak saver flag).
+    const payload: UseRewardPayload = {
+      reward_type: rewardTypeApi,
+    };
 
-    // For now, simulate an API call and then refresh
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+    const result = await useInventoryItem(payload);
 
-    Alert.alert(
-      "Item Used (Simulated)",
-      `${item.title} would have been used. Implement actual logic in handleUseItem.`
-    );
-    console.log("Simulated item usage complete. Actual implementation needed.");
-
-    // Placeholder: In a real scenario, you might call a function like:
-    // const result = await useInventoryItemApi(user.id, item.id, item.reward_type);
-    // if (result.success) { ... refresh data ... }
-    // else { Alert.alert("Error", result.message); }
+    if (result.success) {
+      Alert.alert(
+        "Success",
+        result.message || `${item.title} used successfully.`
+      );
+      await loadInventory(); // Refresh inventory list
+      // TODO: Potentially refresh other global states/contexts if affected
+      // e.g., UserProfileContext if coin balance/streak could change immediately
+      // or if goal display on dashboard needs to update due to goal_reduction.
+    } else {
+      Alert.alert(
+        "Error Using Item",
+        result.error || "Could not use the item."
+      );
+    }
 
     setIsUsingItem(null);
-    await loadInventory(); // Refresh inventory list
-    // Potentially refresh other contexts if item usage affects them, e.g., UserProfileContext for streak savers
   };
 
   if (loading && !refreshing) {

@@ -10,6 +10,7 @@ import { supabase } from "../lib/supabaseClient";
 import { useAuth } from "./AuthContext";
 import { User } from "@supabase/supabase-js";
 import * as userApi from "../api/userApi";
+import { getOwnedRewards, UserOwnedReward } from "../api/inventoryApi";
 import {
   COINS_FOR_DAILY_GOAL_COMPLETION,
   STREAK_BONUS_COINS_PER_DAY,
@@ -25,6 +26,7 @@ export interface UserProfile {
   coin_balance: number;
   current_streak_length: number;
   username?: string | null; // From public.users table
+  ownedRewards: UserOwnedReward[]; // Add ownedRewards
   // Add other fields from user_profile_and_stats or users table as needed
 }
 
@@ -74,7 +76,7 @@ export const UserProfileProvider: React.FC<UserProfileProviderProps> = ({
   const [loadingProfile, setLoadingProfile] = useState<boolean>(true);
 
   /**
-   * Fetches the user profile data from Supabase `user_profile_and_stats` and `users` table.
+   * Fetches the user profile data from Supabase `user_profile_and_stats`, `users` table, and `user_owned_rewards`.
    * It expects the `currentUser` object from `AuthContext`.
    * @param {User} currentUser - The authenticated user object from Supabase.
    */
@@ -98,7 +100,7 @@ export const UserProfileProvider: React.FC<UserProfileProviderProps> = ({
         // PGRST116: row not found
         // If the error is NOT "row not found", then it's a real error
         console.error("Error fetching user profile stats:", profileStatsError);
-        throw profileStatsError;
+        // Not throwing here to allow fetching other parts of the profile
       }
 
       // Fetch username from public.users table
@@ -110,36 +112,60 @@ export const UserProfileProvider: React.FC<UserProfileProviderProps> = ({
 
       if (publicUserError && publicUserError.code !== "PGRST116") {
         console.error("Error fetching public user data:", publicUserError);
-        throw publicUserError;
       }
 
-      if (profileStats) {
-        // If profileStats exists, construct the profile
-        setProfile({
-          user_id: currentUser.id,
-          coin_balance: profileStats.coin_balance,
-          current_streak_length: profileStats.current_streak_length,
-          username: publicUser?.username,
-        });
-      } else {
-        // This case should ideally be handled by the trigger that creates a profile on sign-up.
-        // If trigger didn't run or this is an old user, profile might be null.
-        console.warn("User profile stats not found for user:", currentUser.id);
-        // We can set a default or partial profile, or leave it null
-        setProfile({
-          user_id: currentUser.id,
-          coin_balance: 0, // Default value
-          current_streak_length: 0, // Default value
-          username: publicUser?.username,
-        });
+      // Fetch owned rewards
+      const { data: ownedRewardsData, error: rewardsError } =
+        await getOwnedRewards(currentUser);
+
+      if (rewardsError) {
+        console.error("Error fetching owned rewards:", rewardsError);
+        // Potentially set ownedRewards to empty array or handle error more gracefully
       }
+
+      // Construct the profile
+      // Ensure default values if parts of the data are missing
+      const baseProfile = {
+        user_id: currentUser.id,
+        coin_balance: 0,
+        current_streak_length: 0,
+        username: null,
+        ownedRewards: [],
+      };
+
+      if (profileStats) {
+        baseProfile.coin_balance = profileStats.coin_balance;
+        baseProfile.current_streak_length = profileStats.current_streak_length;
+      } else {
+        console.warn("User profile stats not found for user:", currentUser.id);
+      }
+
+      if (publicUser) {
+        baseProfile.username = publicUser.username;
+      } else {
+        console.warn(
+          "Public user data (username) not found for user:",
+          currentUser.id
+        );
+      }
+
+      baseProfile.ownedRewards = ownedRewardsData || [];
+
+      setProfile(baseProfile);
     } catch (error) {
       console.error("Error in fetchUserProfile logic:", error);
-      setProfile(null); // Set profile to null on error
+      setProfile({
+        // Set a default error state profile
+        user_id: currentUser.id,
+        coin_balance: 0,
+        current_streak_length: 0,
+        username: null,
+        ownedRewards: [],
+      });
     } finally {
       setLoadingProfile(false);
     }
-  }, []);
+  }, []); // Removed supabase from dependencies as it's stable
 
   /**
    * Effect to fetch user profile when the authenticated user changes or session is available.
