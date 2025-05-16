@@ -3,7 +3,6 @@ import { View } from "react-native"; // Import View for a potential loading scre
 import { Slot, useRouter, useSegments } from "expo-router";
 import { AuthProvider, useAuth } from "../src/contexts/AuthContext";
 import { UserProfileProvider } from "../src/contexts/UserProfileContext";
-import { GoalsProvider } from "../src/contexts/GoalsContext";
 import { PaperProvider, ActivityIndicator, Text } from "react-native-paper";
 // Import a theme if you have one or use the default
 // import { AppTheme } from "../src/constants/theme";
@@ -99,18 +98,16 @@ const RootLayoutNav = () => {
 
 /**
  * `RootLayout` is the main layout component for the application.
- * It wraps the entire app with `AuthProvider`, `UserProfileProvider`, `GoalsProvider`, and `PaperProvider`.
+ * It wraps the entire app with `AuthProvider`, `UserProfileProvider`, and `PaperProvider`.
  * @returns {JSX.Element} The root layout component.
  */
 export default function RootLayout() {
   return (
     <AuthProvider>
       <UserProfileProvider>
-        <GoalsProvider>
-          <PaperProvider>
-            <RootLayoutNav />
-          </PaperProvider>
-        </GoalsProvider>
+        <PaperProvider>
+          <RootLayoutNav />
+        </PaperProvider>
       </UserProfileProvider>
     </AuthProvider>
   );
