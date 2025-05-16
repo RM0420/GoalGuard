@@ -53,13 +53,23 @@ With the updated tech stack, the app is developed using **React Native with Type
     - Users earn coins for completing daily goals (e.g., 10 coins per day).
     - **Streak Bonus:** Additional coins (e.g., +5 coins per day after a 3-day streak).
   - **Rewards Store:**
-    - **Skip Day:** 50 coins – Skip a day's goal without breaking the streak.
-    - **Streak Saver:** 75 coins – Maintain your streak despite a missed goal.
-    - **Goal Reduction:** 30 coins – Temporarily lower the daily goal target.
+    - Users can spend coins to purchase various rewards. Purchased rewards are added to their inventory for later use.
+    - **Skip Day:** 50 coins – Skip the current day's goal. The goal is marked as 'skipped', the user's streak is maintained (it neither increments nor resets). This item is actively used by the user from their inventory.
+    - **Streak Saver:** 75 coins – Passively protects a user's streak. If a user fails to meet their daily goal and would normally lose their streak, this item is automatically consumed in the background. The streak is maintained for that instance (it neither increments nor resets), and the 'Streak Saver' item is removed from inventory. Only one 'Streak Saver' can be used per potential streak break.
+    - **Goal Reduction:** 30 coins – Temporarily lowers the daily goal target for the current day by 25% when actively used by the user from their inventory. Goal reductions can be stacked
+  - **User Inventory:** Users can view their purchased and currently held rewards (e.g., "Skip Day" items) in a dedicated inventory section. Items like "Skip Day" and "Goal Reduction" can be activated or used at a later time. "Streak Saver" items are passive and consumed automatically.
   - **Bonus Challenges:**
     - Randomly triggered challenges (e.g., "Run 7 km instead of 5 km") awarding extra coins (e.g., +20 coins).
   - **Future Social Features:**
     - A friend system to compare streaks and a leaderboard for competitive motivation.
+- **Key Screens/Components:**
+  - **Login/Registration:** Using Supabase Auth for secure authentication.
+  - **Dashboard:** Displays current goal status, progress (from HealthKit), streak, and coin balance.
+  - **Goal Setting:** Interface for defining daily goals and selecting apps to block.
+  - **Progress Tracking:** Visual representation of HealthKit data.
+  - **Rewards Store:** UI for purchasing rewards with coins.
+  - **Inventory Screen:** Displays rewards currently owned by the user.
+  - **Screen Time Setup:** Instructions to help users grant the required permissions.
 
 ---
 
@@ -77,7 +87,8 @@ With the updated tech stack, the app is developed using **React Native with Type
   - **Dashboard:** Displays current goal status, progress (from HealthKit), streak, and coin balance.
   - **Goal Setting:** Interface for defining daily goals and selecting apps to block.
   - **Progress Tracking:** Visual representation of HealthKit data.
-  - **Rewards Store:** UI for redeeming coins on rewards (Skip Day, Streak Saver, Goal Reduction).
+  - **Rewards Store:** UI for purchasing rewards with coins.
+  - **Inventory Screen:** Displays rewards currently owned by the user.
   - **Screen Time Setup:** Instructions to help users grant the required permissions.
 
 ### 3.2 Authentication
@@ -114,9 +125,14 @@ With the updated tech stack, the app is developed using **React Native with Type
   - **Goal Validation:**
     - Validates if the daily physical goal is met using HealthKit data.
   - **Blocking Status:**
-    - A scheduled Edge Function runs at 12:00 AM to check the previous day's goal status and, if unmet, triggers the Screen Time API to block selected apps.
+    - A scheduled Edge Function (`daily-goal-check`) runs at 12:00 AM to check the previous day's goal status.
+    - It determines if the goal was completed, skipped (via 'Skip Day' reward), or failed.
+    - If failed, it checks for an available 'Streak Saver' reward. If present, the saver is consumed, and the streak is maintained. Otherwise, the streak resets.
+    - It updates the user's streak length and coin balance (awarding coins for completion and streak bonuses).
+    - If the goal was ultimately unmet (failed and not saved by a streak saver), it triggers the Screen Time API to block selected apps.
   - **Reward Updates:**
-    - Calculates coin earnings, updates streaks, and processes reward redemptions.
+    - The `use-reward` Edge Function processes direct reward redemptions initiated by the user (e.g., 'Skip Day', 'Goal Reduction'), updating inventory and applying immediate effects like modifying `daily_progress`.
+    - The `daily-goal-check` Edge Function handles automatic consumption of 'Streak Saver' rewards, calculates coin earnings for goal completions and streak bonuses, and updates user streaks and coin balances accordingly. It logs all relevant transactions.
   - **Friend System:**
     - (Future feature) Manages friend requests and streak comparisons.
 
@@ -286,10 +302,12 @@ Tracks the user's progress towards their daily goal, typically synced from Healt
 
 - `id`: `UUID` (Primary Key, Default: `gen_random_uuid()`)
 - `user_id`: `UUID` (Foreign Key to `users(id)` ON DELETE CASCADE)
-- `goal_id`: `UUID` (Foreign Key to `goals(id)` ON DELETE CASCADE) - Links to the `goals` record that was active for the user on this specific `date`.
+- `goal_id`: `UUID` (Foreign Key to `goals(id)` ON DELETE CASCADE, Nullable) - Links to the `goals` record that was active for the user on this specific `date`. Can be null if a day is skipped without an active goal.
 - `date`: `DATE` - The specific day this progress entry is for.
 - `progress_data`: `JSONB` (e.g., `{"steps_count": 7500, "distance_ran_km": 4.5}`) - Flexible field to store various progress metrics achieved on this `date`.
-- `status`: `TEXT` (ENUM: 'pending', 'completed', 'failed', 'skipped', Default: 'pending') - Status of the goal's completion for this specific `date`.
+- `status`: `TEXT` (ENUM: 'pending', 'completed', 'failed', 'skipped', 'failed_streak_saved', Default: 'pending') - Status of the goal's completion for this specific `date`.
+- `effective_target_value`: `INTEGER` (Nullable) - If 'Goal Reduction' reward is used, this stores the temporarily reduced target value for the day.
+- `effective_target_unit`: `TEXT` (Nullable) - Unit for the `effective_target_value`.
 - `last_fetched_from_healthkit`: `TIMESTAMPTZ` - Timestamp of the last sync with HealthKit.
 - `created_at`: `TIMESTAMPTZ` (Default: `NOW()`)
 - **Constraint**: `UNIQUE (user_id, date)` - Ensures one progress entry per user per day.
@@ -307,7 +325,31 @@ Logs all changes to a user's coin balance, including earnings and spending.
 - `reward_details`: `JSONB` (Nullable, e.g. `{"reward_type": "skip_day"}` or `{"challenge_name": "Extra Mile Challenge"}`) - Additional details about the transaction.
 - `created_at`: `TIMESTAMPTZ` (Default: `NOW()`)
 
-### 8.6 `friends` Table (Future Feature)
+### 8.6 `user_owned_rewards` Table (Previously 8.7, renumbered for flow)
+
+Stores the rewards currently owned by a user and available for use.
+
+- `id`: `UUID` (Primary Key, Default: `gen_random_uuid()`)
+- `user_id`: `UUID` (Foreign Key to `users(id)` ON DELETE CASCADE, NOT NULL)
+- `reward_type`: `TEXT` (ENUM: 'skip_day', 'streak_saver', 'goal_reduction', NOT NULL) - Type of reward owned.
+- `quantity`: `INTEGER` (NOT NULL, Default: 1, CHECK (`quantity` > 0)) - Number of this reward type owned.
+- `acquired_at`: `TIMESTAMPTZ` (NOT NULL, Default: `NOW()`) - Timestamp of when the first instance of this reward type was acquired or quantity was last incremented.
+- `updated_at`: `TIMESTAMPTZ` (NOT NULL, Default: `NOW()`) - Timestamp of the last update to this record.
+- **Constraint**: `UNIQUE (user_id, reward_type)` - Ensures one row per unique reward type per user, quantity is managed within that row.
+- **RLS**: Enabled, users can only select/update their own owned rewards. (Note: `use-reward` and `daily-goal-check` functions operate with elevated privileges for decrements).
+
+### 8.7 `streak_savers_applied` Table (New Table)
+
+Logs instances where a streak saver was automatically consumed to protect a user's streak.
+
+- `id`: `UUID` (Primary Key, Default: `gen_random_uuid()`)
+- `user_id`: `UUID` (Foreign Key to `users(id)` ON DELETE CASCADE, NOT NULL)
+- `date_saved`: `DATE` (NOT NULL) - The date for which the streak was saved.
+- `created_at`: `TIMESTAMPTZ` (NOT NULL, Default: `NOW()`) - Timestamp of when the saver was applied.
+- **Constraint**: `UNIQUE (user_id, date_saved)` - Ensures a streak saver can only be applied once per user per day.
+- **RLS**: Typically, users might only have read access to their own records if direct access is granted. Insertions are handled by the `daily-goal-check` Edge Function.
+
+### 8.8 `friends` Table (Future Feature, previously 8.6)
 
 Manages relationships between users for social features.
 
@@ -339,6 +381,7 @@ GoalGuard/
 │ │ ├── goals.tsx # Goal setting and viewing
 │ │ ├── progress.tsx # Detailed progress display
 │ │ ├── rewards-store.tsx
+│ │ ├── inventory.tsx # Screen to display user's owned rewards
 │ │ └── profile.tsx # User profile, settings
 │ ├── modal/ # For modal screens
 │ │ └── screen-time-setup.tsx
@@ -354,12 +397,14 @@ GoalGuard/
 │ ├── api/ # Functions for interacting with Supabase backend
 │ │ ├── goalsApi.ts
 │ │ ├── userApi.ts
-│ │ └── transactionsApi.ts
+│ │ ├── transactionsApi.ts
+│ │ └── inventoryApi.ts
 │ ├── components/ # Reusable UI components (built with React Native Paper)
 │ │ ├── common/ # Generic components (buttons, cards, etc.)
 │ │ ├── auth/ # Auth-specific components
 │ │ ├── goals/ # Goal-related components
-│ │ └── gamification/ # Gamification-related components (e.g., streak display)
+│ │ ├── gamification/ # Gamification-related components (e.g., streak display)
+│ │ └── inventory/ # Components specific to the inventory screen
 │ ├── constants/ # Global constants
 │ │ ├── colors.ts
 │ │ ├── enums.ts # TypeScript enums (GoalType, RewardType, etc.)

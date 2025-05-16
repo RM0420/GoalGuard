@@ -145,3 +145,39 @@ export const getDailyProgressHistory = async (
 // Potential future functions:
 // - getDailyProgress(userId: string, date: string, goalId: string): Promise<DailyProgress | null>
 // - getProgressHistory(userId: string, limit: number): Promise<DailyProgress[] | null] // Old comment, new one above is more specific
+
+/**
+ * `getTodaysDailyProgress`
+ * Fetches the daily progress entry for a given user for the current date.
+ * @param {string} userId - The ID of the user whose progress to fetch.
+ * @returns {Promise<{ data?: DailyProgress | null; error?: any }>} The daily progress entry or null/error.
+ */
+export const getTodaysDailyProgress = async (
+  userId: string
+): Promise<{ data?: DailyProgress | null; error?: any }> => {
+  if (!userId) {
+    console.error("getTodaysDailyProgress: Missing required userId.");
+    return { error: { message: "User ID is required." } };
+  }
+
+  try {
+    const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+
+    const { data, error } = await supabase
+      .from("daily_progress")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("date", today)
+      .maybeSingle(); // It's possible no entry exists for today yet
+
+    if (error) {
+      console.error("Error fetching today's daily progress:", error);
+      return { error };
+    }
+
+    return { data };
+  } catch (err) {
+    console.error("Unexpected error in getTodaysDailyProgress:", err);
+    return { error: err };
+  }
+};
