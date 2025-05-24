@@ -3,7 +3,14 @@ import {
   createClient,
   SupabaseClient,
 } from "https://esm.sh/@supabase/supabase-js@2";
-import { corsHeaders } from "../_shared/cors.ts";
+
+// Define CORS headers directly to avoid import issues
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*", // Or your specific frontend URL for better security
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, GET, OPTIONS, PUT, DELETE",
+};
 
 // Define types from database.types.ts manually for clarity in function
 // In a real setup, you might share these types or generate them for functions too.
@@ -23,7 +30,7 @@ interface DailyProgress {
   status:
     | "pending"
     | "completed"
-    | "failed"
+    | "missed"
     | "skipped"
     | "failed_streak_saved";
   effective_target_value?: number | null;
@@ -170,7 +177,7 @@ serve(async (req: Request) => {
           `User ${userId} skipped goal on ${yesterdayDateString}. Streak maintained at ${currentStreak}.`
         );
       }
-      // Assume HealthKit data pushed and evaluated into 'completed' or 'failed' if not 'skipped'/'pending'
+      // Assume HealthKit data pushed and evaluated into 'completed' or 'missed' if not 'skipped'/'pending'
       // Or, this function *is* the evaluator.
       // For now, let's assume if it's not skipped, we check completion based on target.
       else if (activeGoalForDay && dailyProgressEntry?.progress_data) {
@@ -188,12 +195,12 @@ serve(async (req: Request) => {
           finalGoalStatusToday = "completed";
         } else {
           goalMet = false; // Explicitly false
-          finalGoalStatusToday = "failed";
+          finalGoalStatusToday = "missed";
         }
       } else if (activeGoalForDay && !dailyProgressEntry?.progress_data) {
         // Active goal, but no progress data (and not skipped)
         goalMet = false;
-        finalGoalStatusToday = "failed";
+        finalGoalStatusToday = "missed";
         console.log(
           `User ${userId} had active goal but no progress data for ${yesterdayDateString}.`
         );
@@ -263,10 +270,10 @@ serve(async (req: Request) => {
           );
           // Proceed to reset streak if saver check fails
           console.log(
-            `Resetting streak for user ${userId} due to failed goal and saver check error.`
+            `Resetting streak for user ${userId} due to missed goal and saver check error.`
           );
           currentStreak = 0;
-          finalGoalStatusToday = "failed";
+          finalGoalStatusToday = "missed";
         } else if (streakSavers && streakSavers.length > 0) {
           const saver = streakSavers[0] as UserOwnedReward;
           console.log(
@@ -299,10 +306,10 @@ serve(async (req: Request) => {
           );
         } else {
           console.log(
-            `Resetting streak for user ${userId} due to failed goal and no saver.`
+            `Resetting streak for user ${userId} due to missed goal and no saver.`
           );
           currentStreak = 0;
-          finalGoalStatusToday = "failed";
+          finalGoalStatusToday = "missed";
         }
       }
 
