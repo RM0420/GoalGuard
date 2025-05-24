@@ -1,19 +1,15 @@
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback } from "react";
 import {
   View,
   StyleSheet,
   FlatList,
   Alert,
   RefreshControl,
+  Dimensions,
 } from "react-native";
-import {
-  Text,
-  ActivityIndicator,
-  Appbar,
-  Title,
-  Paragraph,
-} from "react-native-paper";
+import { Text, ActivityIndicator, Badge, useTheme } from "react-native-paper";
 import { useFocusEffect } from "expo-router";
+import { LinearGradient } from "expo-linear-gradient";
 import {
   fetchUserInventory,
   useInventoryItem,
@@ -32,6 +28,8 @@ import {
   REWARD_COST_STREAK_SAVER,
   REWARD_COST_GOAL_REDUCTION,
 } from "../../src/constants/gamification";
+import StyledHeader from "../../src/components/common/StyledHeader";
+import type { AppTheme } from "../../src/constants/theme";
 
 // Helper function to map reward type to display properties
 const getRewardDisplayProperties = (rewardType: ActiveRewardType) => {
@@ -41,24 +39,32 @@ const getRewardDisplayProperties = (rewardType: ActiveRewardType) => {
         title: "Skip Day",
         description: "Skip a day's goal without breaking your streak.",
         cost: REWARD_COST_SKIP_DAY, // For reference, though already paid
+        icon: "calendar-blank",
+        color: "warning" as const, // Maps to our theme colors
       };
     case "streak_saver":
       return {
         title: "Streak Saver",
         description: "Maintain your streak despite a missed goal.",
         cost: REWARD_COST_STREAK_SAVER,
+        icon: "shield-outline",
+        color: "success" as const, // Maps to our theme colors
       };
     case "goal_reduction":
       return {
         title: "Goal Reduction",
         description: "Temporarily lower your daily goal target.",
         cost: REWARD_COST_GOAL_REDUCTION,
+        icon: "target",
+        color: "primary" as const, // Maps to our theme colors
       };
     default:
       return {
         title: "Unknown Reward",
         description: "Details for this reward are not available.",
         cost: 0,
+        icon: "help-circle-outline",
+        color: "muted" as const, // Maps to our theme colors
       };
   }
 };
@@ -69,14 +75,11 @@ const getRewardDisplayProperties = (rewardType: ActiveRewardType) => {
  */
 export default function InventoryScreen() {
   const { user } = useAuth();
+  const theme = useTheme<AppTheme>();
   const [inventory, setInventory] = useState<MappedUserOwnedReward[]>([]);
   const [loading, setLoading] = useState(true);
   const [isUsingItem, setIsUsingItem] = useState<string | null>(null); // Stores ID of item being used
   const [refreshing, setRefreshing] = useState(false);
-
-  // Ensure local ActiveRewardType (from src/types/inventory.types) is compatible
-  // or use ApiActiveRewardType directly if suitable for getRewardDisplayProperties.
-  // For now, we assume MappedUserOwnedReward.reward_type can be cast to ApiActiveRewardType for valid items.
 
   const loadInventory = useCallback(async () => {
     if (!user) {
@@ -87,7 +90,8 @@ export default function InventoryScreen() {
     setLoading(true);
     const response = await fetchUserInventory();
     if (response.success && response.data) {
-      const mappedData = response.data.map((item) => ({
+      // Map the API response to include our display properties
+      const mappedData: MappedUserOwnedReward[] = response.data.map((item) => ({
         ...item,
         ...getRewardDisplayProperties(item.reward_type),
       }));
@@ -160,60 +164,84 @@ export default function InventoryScreen() {
     setIsUsingItem(null);
   };
 
-  if (loading && !refreshing) {
-    return (
-      <View style={styles.centered}>
-        <ActivityIndicator animating={true} size="large" />
-        <Text style={styles.loadingText}>Loading your inventory...</Text>
-      </View>
-    );
-  }
-
   return (
-    <View style={styles.container}>
-      <Appbar.Header style={styles.appBar}>
-        <Appbar.Content title="My Inventory" titleStyle={styles.appBarTitle} />
-      </Appbar.Header>
-      {inventory.length === 0 ? (
-        <View style={styles.centeredMessageContainer}>
-          <Title style={styles.emptyTitle}>Your Inventory is Empty</Title>
-          <Paragraph style={styles.emptyParagraph}>
-            Visit the Rewards Store to purchase items and enhance your
-            goal-achieving journey!
-          </Paragraph>
+    <LinearGradient
+      colors={[theme.colors.purple50, theme.colors.customBackground]}
+      style={styles.container}
+    >
+      <StyledHeader title="Inventory" />
+
+      {loading && !refreshing ? (
+        <View style={styles.centered}>
+          <ActivityIndicator
+            animating={true}
+            size="large"
+            color={theme.colors.primary}
+          />
+          <Text style={[styles.loadingText, { color: theme.colors.onSurface }]}>
+            Loading your inventory...
+          </Text>
+        </View>
+      ) : inventory.length === 0 ? (
+        <View style={styles.centered}>
+          <Text
+            style={[styles.emptyText, { color: theme.colors.onSurface }]}
+            variant="bodyLarge"
+          >
+            You don't have any items in your inventory yet.
+          </Text>
+          <Text
+            style={[
+              styles.emptySubtext,
+              { color: theme.colors.customMutedForeground },
+            ]}
+            variant="bodyMedium"
+          >
+            Complete goals to earn coins and purchase rewards in the store.
+          </Text>
         </View>
       ) : (
         <FlatList
           data={inventory}
-          renderItem={({ item }) => (
+          renderItem={({ item, index }) => (
             <InventoryItemCard
               item={item}
               onUseItem={handleUseItem}
               isUsingItem={isUsingItem === item.id}
+              animationDelay={index * 100} // For staggered animation
             />
           )}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContentContainer}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[theme.colors.primary]}
+            />
           }
         />
       )}
-    </View>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5", // Light background for the whole screen
   },
-  appBar: {
-    backgroundColor: "#6200ee", // Standard Paper theme primary color
+  headerContainer: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    alignItems: "center",
   },
-  appBarTitle: {
-    color: "#ffffff",
+  headerTitle: {
     fontWeight: "bold",
+    textAlign: "center",
+  },
+  headerSubtitle: {
+    textAlign: "center",
+    marginTop: 4,
   },
   centered: {
     flex: 1,
@@ -241,9 +269,20 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlign: "center",
     lineHeight: 24,
-    color: "#555",
   },
   listContentContainer: {
     paddingVertical: 8,
+    paddingHorizontal: 16,
+  },
+  emptyText: {
+    fontSize: 22,
+    fontWeight: "bold",
+    textAlign: "center",
+    marginBottom: 10,
+  },
+  emptySubtext: {
+    fontSize: 16,
+    textAlign: "center",
+    lineHeight: 24,
   },
 });

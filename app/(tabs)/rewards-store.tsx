@@ -2,12 +2,9 @@ import React, { useState } from "react";
 import { View, StyleSheet, ScrollView, Alert } from "react-native";
 import {
   Text,
-  Card,
-  Button,
-  Title,
-  Paragraph,
-  Divider,
   ActivityIndicator,
+  useTheme,
+  IconButton,
 } from "react-native-paper";
 import { useUserProfile } from "../../src/contexts/UserProfileContext";
 import { useAuth } from "../../src/contexts/AuthContext";
@@ -17,12 +14,22 @@ import {
   REWARD_COST_GOAL_REDUCTION,
 } from "../../src/constants/gamification";
 import { callPurchaseRewardRPC } from "../../src/api/transactionsApi";
+import {
+  StyledCard,
+  CardContent,
+} from "../../src/components/common/StyledCard";
+import { StyledButton } from "../../src/components/common/StyledButton";
+import StyledHeader from "../../src/components/common/StyledHeader";
+import { LinearGradient } from "expo-linear-gradient";
+import type { AppTheme } from "../../src/constants/theme";
 
 interface RewardItem {
   id: string;
   title: string;
   description: string;
   cost: number;
+  icon: string;
+  gradientColors: [string, string];
 }
 
 /**
@@ -33,6 +40,7 @@ export default function RewardsStoreScreen() {
   const { user } = useAuth();
   const { profile, loadingProfile, refreshUserProfile } = useUserProfile();
   const [isPurchasing, setIsPurchasing] = useState<string | null>(null);
+  const theme = useTheme<AppTheme>();
 
   const handlePurchase = async (reward: RewardItem) => {
     if (!user) {
@@ -79,32 +87,6 @@ export default function RewardsStoreScreen() {
           `${reward.title} has been added to your inventory. Your new balance is ${result.new_balance} coins.`
         );
         await refreshUserProfile(); // Refresh profile to show updated coin balance
-
-        // Reward-specific effects are now handled when the item is used from the inventory
-        // So, the switch statement below can be removed or commented out.
-        /*
-        switch (reward.id) {
-          case "skip_day":
-            console.log(
-              "TODO: Implement 'Skip Day' logic - e.g., update current goal status to 'skipped'"
-            );
-            // This might involve calling a function from GoalsContext or goalsApi
-            break;
-          case "streak_saver":
-            console.log(
-              "TODO: Implement 'Streak Saver' logic - this might be a passive flag on the user profile or require specific logic on goal failure"
-            );
-            break;
-          case "goal_reduction":
-            console.log(
-              "TODO: Implement 'Goal Reduction' logic - e.g., allow user to modify current goal's target to a lower value"
-            );
-            // This might involve updating the goal via GoalsContext or goalsApi
-            break;
-          default:
-            break;
-        }
-        */
       } else {
         console.log(`Purchase failed: ${result.message}`);
         Alert.alert(
@@ -130,111 +112,252 @@ export default function RewardsStoreScreen() {
       title: "Skip Day",
       description: "Skip a day's goal without breaking your streak.",
       cost: REWARD_COST_SKIP_DAY,
+      icon: "calendar",
+      gradientColors: [theme.colors.warning500, theme.colors.warning600] as [
+        string,
+        string
+      ],
     },
     {
       id: "streak_saver",
       title: "Streak Saver",
       description: "Maintain your streak despite a missed goal.",
       cost: REWARD_COST_STREAK_SAVER,
+      icon: "shield",
+      gradientColors: [theme.colors.success500, theme.colors.success600] as [
+        string,
+        string
+      ],
     },
     {
       id: "goal_reduction",
       title: "Goal Reduction",
       description: "Temporarily lower your daily goal target.",
       cost: REWARD_COST_GOAL_REDUCTION,
+      icon: "target",
+      gradientColors: [theme.colors.purple500, theme.colors.purple600] as [
+        string,
+        string
+      ],
     },
   ];
 
   if (loadingProfile) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator animating={true} size="large" />
-        <Text>Loading your coins...</Text>
+        <ActivityIndicator
+          animating={true}
+          size="large"
+          color={theme.colors.primary}
+        />
+        <Text style={{ marginTop: 16 }}>Loading your coins...</Text>
       </View>
     );
   }
 
   return (
-    <ScrollView style={styles.container}>
-      <Card style={styles.headerCard}>
-        <Card.Content style={styles.headerContent}>
-          <Title style={styles.storeTitle}>Rewards Store</Title>
-          <View style={styles.coinBalanceContainer}>
-            <Text variant="headlineSmall">Your Coins: </Text>
-            <Text variant="headlineSmall" style={styles.coinText}>
-              {profile?.coin_balance ?? 0}
-            </Text>
-          </View>
-        </Card.Content>
-      </Card>
+    <View style={styles.container}>
+      <StyledHeader title="Store" />
 
-      {rewards.map((reward) => (
-        <Card key={reward.id} style={styles.rewardCard}>
-          <Card.Content>
-            <Title>{reward.title}</Title>
-            <Paragraph>{reward.description}</Paragraph>
-            <Divider style={styles.divider} />
-            <View style={styles.purchaseSection}>
-              <Text variant="titleMedium">Cost: {reward.cost} coins</Text>
-              <Button
-                mode="contained"
-                onPress={() => handlePurchase(reward)}
-                disabled={
-                  (profile?.coin_balance ?? 0) < reward.cost ||
-                  isPurchasing === reward.id
-                }
-                loading={isPurchasing === reward.id}
-              >
-                {isPurchasing === reward.id ? "Purchasing..." : "Purchase"}
-              </Button>
+      <LinearGradient
+        colors={
+          [theme.colors.purple50, theme.colors.customBackground] as [
+            string,
+            string
+          ]
+        }
+        style={styles.gradientBackground}
+      >
+        {/* Coin Balance Card */}
+        <LinearGradient
+          colors={
+            [theme.colors.purple700, theme.colors.purple900] as [string, string]
+          }
+          style={styles.coinBalanceCard}
+        >
+          <View style={styles.coinBalanceContent}>
+            <IconButton
+              icon="coins"
+              iconColor="#FFD700"
+              size={32}
+              style={styles.coinIcon}
+            />
+            <View>
+              <Text style={styles.coinBalanceLabel}>Your Coins</Text>
+              <Text style={styles.coinBalanceValue}>
+                {profile?.coin_balance ?? 0}
+              </Text>
             </View>
-          </Card.Content>
-        </Card>
-      ))}
-    </ScrollView>
+          </View>
+        </LinearGradient>
+
+        {/* Rewards List */}
+        <ScrollView contentContainerStyle={styles.rewardsContainer}>
+          {rewards.map((reward, index) => (
+            <StyledCard
+              key={reward.id}
+              style={{
+                ...styles.rewardCard,
+                marginTop: index > 0 ? 16 : 0,
+              }}
+              withShadow
+            >
+              <View style={styles.rewardCardContent}>
+                {/* Icon Section */}
+                <LinearGradient
+                  colors={reward.gradientColors}
+                  style={styles.rewardIconContainer}
+                >
+                  <IconButton
+                    icon={reward.icon}
+                    iconColor="white"
+                    size={28}
+                    style={styles.rewardIcon}
+                  />
+                </LinearGradient>
+
+                {/* Content Section */}
+                <CardContent style={styles.rewardDetails}>
+                  <View style={styles.rewardHeader}>
+                    <Text style={styles.rewardTitle}>{reward.title}</Text>
+                    <Text style={styles.rewardDescription}>
+                      {reward.description}
+                    </Text>
+                  </View>
+
+                  <View style={styles.purchaseSection}>
+                    <View style={styles.costContainer}>
+                      <Text style={styles.costText}>
+                        Cost: {reward.cost} coins
+                      </Text>
+                    </View>
+
+                    <StyledButton
+                      variant="default"
+                      size="sm"
+                      onPress={() => handlePurchase(reward)}
+                      disabled={
+                        (profile?.coin_balance ?? 0) < reward.cost ||
+                        isPurchasing === reward.id
+                      }
+                      loading={isPurchasing === reward.id}
+                    >
+                      {isPurchasing === reward.id
+                        ? "Purchasing..."
+                        : "Purchase"}
+                    </StyledButton>
+                  </View>
+                </CardContent>
+              </View>
+            </StyledCard>
+          ))}
+        </ScrollView>
+      </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "white",
+  },
+  gradientBackground: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
   },
   centered: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
+    backgroundColor: "white",
   },
-  headerCard: {
-    margin: 10,
-    elevation: 2,
+  subtitle: {
+    textAlign: "center",
+    marginVertical: 16,
+    color: "#64748b",
+    fontSize: 16,
   },
-  headerContent: {
-    alignItems: "center",
+  coinBalanceCard: {
+    borderRadius: 12,
+    marginBottom: 24,
+    elevation: 4,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    overflow: "hidden",
   },
-  storeTitle: {
-    marginBottom: 10,
-  },
-  coinBalanceContainer: {
+  coinBalanceContent: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
   },
-  coinText: {
+  coinIcon: {
+    margin: 0,
+    marginRight: 12,
+  },
+  coinBalanceLabel: {
+    color: "#e2e8f0",
+    fontSize: 14,
+  },
+  coinBalanceValue: {
+    color: "white",
+    fontSize: 28,
     fontWeight: "bold",
-    color: "#6200ee",
+  },
+  rewardsContainer: {
+    paddingBottom: 20,
   },
   rewardCard: {
-    marginHorizontal: 10,
-    marginBottom: 15,
-    elevation: 2,
+    overflow: "hidden",
+    borderRadius: 12,
+    elevation: 3,
   },
-  divider: {
-    marginVertical: 10,
+  rewardCardContent: {
+    flexDirection: "row",
+  },
+  rewardIconContainer: {
+    width: 60,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  rewardIcon: {
+    margin: 0,
+  },
+  rewardDetails: {
+    flex: 1,
+    paddingVertical: 16,
+  },
+  rewardHeader: {
+    marginBottom: 16,
+  },
+  rewardTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#1e293b",
+    marginBottom: 4,
+  },
+  rewardDescription: {
+    fontSize: 14,
+    color: "#64748b",
   },
   purchaseSection: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginTop: 10,
+  },
+  costContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+    marginRight: 8,
+  },
+  costText: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#1e293b",
   },
 });

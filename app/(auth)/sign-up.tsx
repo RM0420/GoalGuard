@@ -1,8 +1,10 @@
 import React, { useState } from "react";
-import { View, StyleSheet, Alert } from "react-native";
-import { TextInput, Button, Text, PaperProvider } from "react-native-paper";
+import { View, StyleSheet, Alert, Image } from "react-native";
+import { TextInput, Text, PaperProvider } from "react-native-paper";
 import { Link, useRouter } from "expo-router";
-import { useAuth } from "../../src/contexts/AuthContext"; // Adjusted path
+import { useAuth } from "../../src/contexts/AuthContext";
+import StyledButton from "../../src/components/common/StyledButton";
+import { AppTheme } from "../../src/constants/theme";
 
 /**
  * `SignUpScreen` provides a UI for new users to create an account.
@@ -14,6 +16,9 @@ export default function SignUpScreen() {
   const [password, setPassword] = useState<string>("");
   const [confirmPassword, setConfirmPassword] = useState<string>("");
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [passwordVisible, setPasswordVisible] = useState<boolean>(false);
+  const [confirmPasswordVisible, setConfirmPasswordVisible] =
+    useState<boolean>(false);
   const { signUpWithEmail } = useAuth();
   const router = useRouter();
 
@@ -51,11 +56,24 @@ export default function SignUpScreen() {
   };
 
   return (
-    <PaperProvider>
+    <PaperProvider theme={AppTheme}>
       <View style={styles.container}>
+        <View style={styles.logoContainer}>
+          <Image
+            source={require("../../assets/icon.png")}
+            style={styles.logo}
+            resizeMode="contain"
+          />
+        </View>
+
         <Text variant="headlineMedium" style={styles.title}>
-          Sign Up
+          Create Account
         </Text>
+
+        <Text variant="bodyMedium" style={styles.subtitle}>
+          Join GoalGuard and start achieving your goals
+        </Text>
+
         <TextInput
           label="Email"
           value={email}
@@ -64,34 +82,63 @@ export default function SignUpScreen() {
           keyboardType="email-address"
           autoCapitalize="none"
           disabled={isLoading}
+          mode="outlined"
+          outlineColor={AppTheme.colors.customBorder}
+          activeOutlineColor={AppTheme.colors.purple700}
         />
+
         <TextInput
           label="Password"
           value={password}
           onChangeText={setPassword}
           style={styles.input}
-          secureTextEntry
+          secureTextEntry={!passwordVisible}
           disabled={isLoading}
+          mode="outlined"
+          outlineColor={AppTheme.colors.customBorder}
+          activeOutlineColor={AppTheme.colors.purple700}
+          right={
+            <TextInput.Icon
+              icon={passwordVisible ? "eye-off" : "eye"}
+              onPress={() => setPasswordVisible(!passwordVisible)}
+            />
+          }
         />
+
         <TextInput
           label="Confirm Password"
           value={confirmPassword}
           onChangeText={setConfirmPassword}
           style={styles.input}
-          secureTextEntry
+          secureTextEntry={!confirmPasswordVisible}
           disabled={isLoading}
+          mode="outlined"
+          outlineColor={AppTheme.colors.customBorder}
+          activeOutlineColor={AppTheme.colors.purple700}
+          right={
+            <TextInput.Icon
+              icon={confirmPasswordVisible ? "eye-off" : "eye"}
+              onPress={() => setConfirmPasswordVisible(!confirmPasswordVisible)}
+            />
+          }
         />
-        <Button
-          mode="contained"
+
+        <StyledButton
+          variant="default"
+          size="lg"
           onPress={handleSignUp}
           style={styles.button}
           loading={isLoading}
           disabled={isLoading}
         >
           Sign Up
-        </Button>
+        </StyledButton>
+
         <Link href="/(auth)/sign-in" style={styles.link}>
-          <Text>Already have an account? Sign In</Text>
+          <Text style={styles.linkText}>
+            Already have an account?{" "}
+            <Text style={styles.linkHighlight}>Sign In</Text>
+          </Text>
         </Link>
       </View>
     </PaperProvider>
@@ -102,21 +149,44 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     justifyContent: "center",
-    padding: 20,
+    padding: 24,
+    backgroundColor: AppTheme.colors.background,
+  },
+  logoContainer: {
+    alignItems: "center",
+    marginBottom: 24,
+  },
+  logo: {
+    width: 80,
+    height: 80,
   },
   title: {
     textAlign: "center",
-    marginBottom: 20,
+    marginBottom: 8,
+    fontWeight: "700",
+    color: AppTheme.colors.onBackground,
+  },
+  subtitle: {
+    textAlign: "center",
+    marginBottom: 32,
+    color: AppTheme.colors.customMutedForeground,
   },
   input: {
-    marginBottom: 15,
+    marginBottom: 16,
+    backgroundColor: AppTheme.colors.background,
   },
   button: {
-    marginTop: 10,
-    paddingVertical: 8,
+    marginTop: 8,
+    marginBottom: 24,
   },
   link: {
-    marginTop: 20,
-    textAlign: "center",
+    alignSelf: "center",
+  },
+  linkText: {
+    color: AppTheme.colors.customMutedForeground,
+  },
+  linkHighlight: {
+    color: AppTheme.colors.purple700,
+    fontWeight: "600",
   },
 });

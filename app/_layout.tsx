@@ -1,11 +1,11 @@
 import React, { useEffect } from "react";
-import { View } from "react-native"; // Import View for a potential loading screen
+import { View, StatusBar } from "react-native";
 import { Slot, useRouter, useSegments } from "expo-router";
 import { AuthProvider, useAuth } from "../src/contexts/AuthContext";
 import { UserProfileProvider } from "../src/contexts/UserProfileContext";
 import { PaperProvider, ActivityIndicator, Text } from "react-native-paper";
-// Import a theme if you have one or use the default
-// import { AppTheme } from "../src/constants/theme";
+import { AppTheme } from "../src/constants/theme";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 
 /**
  * `RootLayoutNav` is a component that handles the navigation logic based on auth state.
@@ -79,11 +79,23 @@ const RootLayoutNav = () => {
           flex: 1,
           justifyContent: "center",
           alignItems: "center",
-          backgroundColor: "#FFFFFF",
+          backgroundColor: AppTheme.colors.background,
         }}
       >
-        <ActivityIndicator animating={true} size="large" />
-        <Text style={{ marginTop: 10 }}>Loading App...</Text>
+        <ActivityIndicator
+          animating={true}
+          size="large"
+          color={AppTheme.colors.purple700}
+        />
+        <Text
+          style={{
+            marginTop: 16,
+            color: AppTheme.colors.onBackground,
+            ...AppTheme.fonts.titleMedium,
+          }}
+        >
+          Loading GoalGuard...
+        </Text>
       </View>
     );
   }
@@ -103,12 +115,18 @@ const RootLayoutNav = () => {
  */
 export default function RootLayout() {
   return (
-    <AuthProvider>
-      <UserProfileProvider>
-        <PaperProvider>
-          <RootLayoutNav />
-        </PaperProvider>
-      </UserProfileProvider>
-    </AuthProvider>
+    <SafeAreaProvider>
+      <StatusBar
+        barStyle="dark-content"
+        backgroundColor={AppTheme.colors.background}
+      />
+      <AuthProvider>
+        <UserProfileProvider>
+          <PaperProvider theme={AppTheme}>
+            <RootLayoutNav />
+          </PaperProvider>
+        </UserProfileProvider>
+      </AuthProvider>
+    </SafeAreaProvider>
   );
 }

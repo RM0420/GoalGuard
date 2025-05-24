@@ -3,15 +3,22 @@ import { View, StyleSheet, Alert, ScrollView } from "react-native";
 import {
   Text,
   TextInput,
-  Button,
-  Card,
   ActivityIndicator,
   RadioButton,
   Divider,
+  useTheme,
 } from "react-native-paper";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { getActiveGoal, setGoal, SetGoalData } from "../../src/api/goalsApi";
 import { Database } from "../../src/types/database.types"; // For Goal type
+import {
+  StyledCard,
+  CardContent,
+  CardTitle,
+} from "../../src/components/common/StyledCard";
+import { StyledButton } from "../../src/components/common/StyledButton";
+import { AppTheme } from "../../src/constants/theme";
+import StyledHeader from "../../src/components/common/StyledHeader";
 
 // Define Goal type based on Supabase schema
 type Goal = Database["public"]["Tables"]["goals"]["Row"];
@@ -30,6 +37,7 @@ const GOAL_TYPES = {
 
 export default function GoalsScreen() {
   const { user } = useAuth();
+  const theme = useTheme<AppTheme>();
 
   // State for the active goal and loading/submitting states
   const [activeGoal, setActiveGoal] = useState<Goal | null | undefined>(
@@ -182,8 +190,14 @@ export default function GoalsScreen() {
     // Show loading if fetching or activeGoal is not yet determined
     return (
       <View style={styles.centered}>
-        <ActivityIndicator animating={true} size="large" />
-        <Text>Loading your goal...</Text>
+        <ActivityIndicator
+          animating={true}
+          size="large"
+          color={theme.colors.purple700}
+        />
+        <Text style={{ color: theme.colors.onSurface, marginTop: 16 }}>
+          Loading your goal...
+        </Text>
       </View>
     );
   }
@@ -191,14 +205,20 @@ export default function GoalsScreen() {
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={styles.contentContainer}
+      contentContainerStyle={[
+        styles.contentContainer,
+        { backgroundColor: theme.colors.customBackground },
+      ]}
     >
-      <Card style={styles.card}>
-        <Card.Title
-          title={formMode === "edit" ? "Edit Daily Goal" : "Set Daily Goal"}
-        />
-        <Card.Content>
-          <Text variant="titleMedium" style={styles.label}>
+      {/* Header */}
+      <StyledHeader title="Goals" />
+
+      <StyledCard withShadow style={styles.card}>
+        <CardTitle>
+          {formMode === "edit" ? "Edit Daily Goal" : "Set Daily Goal"}
+        </CardTitle>
+        <CardContent>
+          <Text style={[styles.label, { color: theme.colors.onSurface }]}>
             Select Goal Type:
           </Text>
           <RadioButton.Group
@@ -208,27 +228,62 @@ export default function GoalsScreen() {
             value={selectedGoalTypeKey}
           >
             {Object.entries(GOAL_TYPES).map(([key, { label }]) => (
-              <View key={key} style={styles.radioButtonItem}>
-                <RadioButton value={key} disabled={isSubmitting} />
-                <Text>{label}</Text>
+              <View
+                key={key}
+                style={[
+                  styles.radioButtonItem,
+                  {
+                    backgroundColor:
+                      key === selectedGoalTypeKey
+                        ? theme.colors.purple50
+                        : theme.colors.surface,
+                    borderColor:
+                      key === selectedGoalTypeKey
+                        ? theme.colors.purple300
+                        : theme.colors.customBorder,
+                  },
+                ]}
+              >
+                <RadioButton
+                  value={key}
+                  disabled={isSubmitting}
+                  color={theme.colors.purple700}
+                />
+                <Text
+                  style={[
+                    styles.radioButtonLabel,
+                    { color: theme.colors.onSurface },
+                  ]}
+                >
+                  {label}
+                </Text>
               </View>
             ))}
           </RadioButton.Group>
 
           <Divider style={styles.divider} />
 
+          <Text style={[styles.label, { color: theme.colors.onSurface }]}>
+            {`Target ${GOAL_TYPES[selectedGoalTypeKey].label}`}
+          </Text>
           <TextInput
-            label={`Target ${GOAL_TYPES[selectedGoalTypeKey].label}`}
             value={targetValue}
             onChangeText={setTargetValue}
             keyboardType="numeric"
             style={styles.input}
             disabled={isSubmitting}
+            placeholder={`Enter target ${GOAL_TYPES[
+              selectedGoalTypeKey
+            ].label.toLowerCase()}`}
+            placeholderTextColor={theme.colors.customMutedForeground}
+            mode="outlined"
+            outlineColor={theme.colors.customBorder}
+            activeOutlineColor={theme.colors.purple600}
           />
 
           {GOAL_TYPES[selectedGoalTypeKey].units.length > 1 && (
             <>
-              <Text variant="titleMedium" style={styles.label}>
+              <Text style={[styles.label, { color: theme.colors.onSurface }]}>
                 Select Unit:
               </Text>
               <RadioButton.Group
@@ -236,9 +291,35 @@ export default function GoalsScreen() {
                 value={selectedUnit}
               >
                 {GOAL_TYPES[selectedGoalTypeKey].units.map((unit) => (
-                  <View key={unit} style={styles.radioButtonItem}>
-                    <RadioButton value={unit} disabled={isSubmitting} />
-                    <Text>{unit}</Text>
+                  <View
+                    key={unit}
+                    style={[
+                      styles.radioButtonItem,
+                      {
+                        backgroundColor:
+                          unit === selectedUnit
+                            ? theme.colors.purple50
+                            : theme.colors.surface,
+                        borderColor:
+                          unit === selectedUnit
+                            ? theme.colors.purple300
+                            : theme.colors.customBorder,
+                      },
+                    ]}
+                  >
+                    <RadioButton
+                      value={unit}
+                      disabled={isSubmitting}
+                      color={theme.colors.purple700}
+                    />
+                    <Text
+                      style={[
+                        styles.radioButtonLabel,
+                        { color: theme.colors.onSurface },
+                      ]}
+                    >
+                      {unit}
+                    </Text>
                   </View>
                 ))}
               </RadioButton.Group>
@@ -246,26 +327,33 @@ export default function GoalsScreen() {
             </>
           )}
 
+          <Text style={[styles.label, { color: theme.colors.onSurface }]}>
+            Apps to Block
+          </Text>
           <TextInput
-            label="Apps to Block (comma-separated, e.g., instagram,facebook)"
             value={appsToBlockInput}
             onChangeText={setAppsToBlockInput}
             style={styles.input}
             disabled={isSubmitting}
-            placeholder="Optional: com.app.id1, com.app.id2"
+            placeholder="Instagram, TikTok, YouTube"
+            placeholderTextColor={theme.colors.customMutedForeground}
+            mode="outlined"
+            outlineColor={theme.colors.customBorder}
+            activeOutlineColor={theme.colors.purple600}
           />
 
-          <Button
-            mode="contained"
+          <StyledButton
+            variant="default"
+            size="lg"
             onPress={handleSaveGoal}
             loading={isSubmitting || isLoading}
             disabled={isSubmitting || isLoading}
             style={styles.button}
           >
             {formMode === "edit" ? "Update Goal" : "Set Goal"}
-          </Button>
-        </Card.Content>
-      </Card>
+          </StyledButton>
+        </CardContent>
+      </StyledCard>
     </ScrollView>
   );
 }
@@ -276,6 +364,7 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     padding: 16,
+    paddingBottom: 32,
   },
   centered: {
     flex: 1,
@@ -283,25 +372,49 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: 20,
   },
+  header: {
+    marginBottom: 24,
+    alignItems: "center",
+  },
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: "700",
+    marginBottom: 8,
+  },
+  headerSubtitle: {
+    fontSize: 16,
+  },
   card: {
     marginBottom: 16,
   },
   label: {
-    marginBottom: 8,
-    marginTop: 10,
+    fontSize: 16,
+    fontWeight: "600",
+    marginBottom: 12,
+    marginTop: 16,
   },
   input: {
-    marginBottom: 12,
+    marginBottom: 20,
+    fontSize: 16,
+    height: 56,
   },
   button: {
-    marginTop: 16,
+    marginTop: 24,
   },
   radioButtonItem: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 4,
+    marginBottom: 12,
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  radioButtonLabel: {
+    fontSize: 16,
+    marginLeft: 8,
+    fontWeight: "500",
   },
   divider: {
-    marginVertical: 12,
+    marginVertical: 16,
   },
 });

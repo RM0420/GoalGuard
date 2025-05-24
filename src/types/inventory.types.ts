@@ -23,8 +23,10 @@ export interface UserOwnedReward {
  * @interface MappedUserOwnedReward
  * A version of UserOwnedReward that can include additional display-friendly properties, like title and description.
  */
-export interface MappedUserOwnedReward extends UserOwnedReward {
+export type MappedUserOwnedReward = UserOwnedReward & {
   title: string;
   description: string;
-  // Potentially add cost if we want to display it, though it's already paid
-}
+  cost: number;
+  icon?: string;
+  color?: "primary" | "success" | "warning" | "muted";
+};
