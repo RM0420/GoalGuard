@@ -18,6 +18,7 @@ import {
 } from "../../src/components/common/StyledCard";
 import { StyledButton } from "../../src/components/common/StyledButton";
 import { AppTheme } from "../../src/constants/theme";
+import StyledHeader from "../../src/components/common/StyledHeader";
 
 // Define Goal type based on Supabase schema
 type Goal = Database["public"]["Tables"]["goals"]["Row"];
@@ -210,19 +211,7 @@ export default function GoalsScreen() {
       ]}
     >
       {/* Header */}
-      <View style={styles.header}>
-        <Text style={[styles.headerTitle, { color: theme.colors.purple700 }]}>
-          Goals
-        </Text>
-        <Text
-          style={[
-            styles.headerSubtitle,
-            { color: theme.colors.customMutedForeground },
-          ]}
-        >
-          Set your daily targets
-        </Text>
-      </View>
+      <StyledHeader title="Goals" />
 
       <StyledCard withShadow style={styles.card}>
         <CardTitle>

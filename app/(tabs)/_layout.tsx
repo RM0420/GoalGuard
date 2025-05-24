@@ -35,6 +35,8 @@ export default function TabLayout() {
         },
         // Hide the default tab bar as we're using our custom one
         tabBarStyle: { display: "none" },
+        // Hide all default headers
+        headerShown: false,
       }}
       // Use our custom tab bar
       tabBar={(props) => <StyledTabBar {...props} />}
@@ -61,14 +63,12 @@ export default function TabLayout() {
         name="rewards-store"
         options={{
           title: "Store",
-          headerShown: false, // This screen has its own header
         }}
       />
       <Tabs.Screen
         name="inventory"
         options={{
           title: "Inventory",
-          headerShown: false, // This screen has its own header
         }}
       />
       <Tabs.Screen

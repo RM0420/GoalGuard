@@ -14,6 +14,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useTheme } from "react-native-paper";
 import type { AppTheme } from "../../src/constants/theme";
+import StyledHeader from "../../src/components/common/StyledHeader";
 
 /**
  * `ProfileScreen` allows users to view and update their profile information.
@@ -88,14 +89,7 @@ export default function ProfileScreen() {
       />
 
       {/* Header */}
-      <View style={styles.headerContainer}>
-        <Text variant="headlineMedium" style={styles.title}>
-          Profile
-        </Text>
-        <Text variant="bodyMedium" style={styles.subtitle}>
-          Your Profile
-        </Text>
-      </View>
+      <StyledHeader title="Profile" />
 
       {/* Profile Info Card */}
       <StyledCard withShadow style={styles.card}>

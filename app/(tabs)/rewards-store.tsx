@@ -157,7 +157,7 @@ export default function RewardsStoreScreen() {
 
   return (
     <View style={styles.container}>
-      <StyledHeader title="Rewards Store" />
+      <StyledHeader title="Store" />
 
       <LinearGradient
         colors={
@@ -168,8 +168,6 @@ export default function RewardsStoreScreen() {
         }
         style={styles.gradientBackground}
       >
-        <Text style={styles.subtitle}>Spend your hard-earned coins</Text>
-
         {/* Coin Balance Card */}
         <LinearGradient
           colors={

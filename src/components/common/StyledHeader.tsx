@@ -29,28 +29,28 @@ const StyledHeader: React.FC<StyledHeaderProps> = ({
       style={[
         styles.header,
         {
-          backgroundColor: theme.colors.surface,
-          paddingTop: insets.top,
-          height: 56 + insets.top,
+          backgroundColor: theme.colors.background,
+          paddingTop: Math.max(insets.top - 10, 0),
+          height: 60 + Math.max(insets.top - 10, 0),
           elevation: 0,
-          borderBottomWidth: 1,
-          borderBottomColor: theme.colors.customBorder,
+          borderBottomWidth: 0,
         },
       ]}
     >
       {showBackButton && (
         <Appbar.BackAction
           onPress={() => router.back()}
-          color={theme.colors.onSurface}
+          color={theme.colors.purple700}
         />
       )}
       <Appbar.Content
         title={title}
         titleStyle={{
-          color: theme.colors.onSurface,
-          ...theme.fonts.titleMedium,
-          fontWeight: "600",
+          color: theme.colors.purple700,
+          ...theme.fonts.titleLarge,
+          fontWeight: "700",
           textAlign: "center",
+          fontSize: 26,
         }}
       />
       {rightContent && <View style={styles.rightContent}>{rightContent}</View>}

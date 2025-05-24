@@ -399,10 +399,6 @@ export default function ProgressScreen() {
         }
         style={styles.gradientBackground}
       >
-        <Text variant="titleMedium" style={styles.subtitle}>
-          Your Weekly Progress
-        </Text>
-
         {weeklyGroups.length > 0 && (
           <StyledCard style={styles.weekNavigatorCard} withShadow>
             <CardContent style={styles.weekNavigator}>

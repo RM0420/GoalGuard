@@ -169,25 +169,7 @@ export default function InventoryScreen() {
       colors={[theme.colors.purple50, theme.colors.customBackground]}
       style={styles.container}
     >
-      <StyledHeader title="My Inventory" />
-
-      <View style={styles.headerContainer}>
-        <Text
-          style={[styles.headerTitle, { color: theme.colors.onSurface }]}
-          variant="headlineMedium"
-        >
-          My Inventory
-        </Text>
-        <Text
-          style={[
-            styles.headerSubtitle,
-            { color: theme.colors.customMutedForeground },
-          ]}
-          variant="bodyLarge"
-        >
-          Your power-ups and rewards
-        </Text>
-      </View>
+      <StyledHeader title="Inventory" />
 
       {loading && !refreshing ? (
         <View style={styles.centered}>
@@ -201,22 +183,21 @@ export default function InventoryScreen() {
           </Text>
         </View>
       ) : inventory.length === 0 ? (
-        <View style={styles.centeredMessageContainer}>
+        <View style={styles.centered}>
           <Text
-            style={[styles.emptyTitle, { color: theme.colors.onSurface }]}
-            variant="headlineSmall"
+            style={[styles.emptyText, { color: theme.colors.onSurface }]}
+            variant="bodyLarge"
           >
-            Your Inventory is Empty
+            You don't have any items in your inventory yet.
           </Text>
           <Text
             style={[
-              styles.emptyParagraph,
+              styles.emptySubtext,
               { color: theme.colors.customMutedForeground },
             ]}
             variant="bodyMedium"
           >
-            Visit the Rewards Store to purchase items and enhance your
-            goal-achieving journey!
+            Complete goals to earn coins and purchase rewards in the store.
           </Text>
         </View>
       ) : (
@@ -292,5 +273,16 @@ const styles = StyleSheet.create({
   listContentContainer: {
     paddingVertical: 8,
     paddingHorizontal: 16,
+  },
+  emptyText: {
+    fontSize: 22,
+    fontWeight: "bold",
+    textAlign: "center",
+    marginBottom: 10,
+  },
+  emptySubtext: {
+    fontSize: 16,
+    textAlign: "center",
+    lineHeight: 24,
   },
 });
