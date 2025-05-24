@@ -1,5 +1,6 @@
 import React from "react";
 import { Stack } from "expo-router";
+import { AppTheme } from "../../src/constants/theme";
 
 /**
  * `AuthLayout` defines the navigation stack for authentication screens.
@@ -8,9 +9,17 @@ import { Stack } from "expo-router";
  */
 export default function AuthLayout() {
   return (
-    <Stack>
-      <Stack.Screen name="sign-in" options={{ headerShown: false }} />
-      <Stack.Screen name="sign-up" options={{ headerShown: false }} />
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        contentStyle: {
+          backgroundColor: AppTheme.colors.background,
+        },
+        animation: "slide_from_right",
+      }}
+    >
+      <Stack.Screen name="sign-in" />
+      <Stack.Screen name="sign-up" />
     </Stack>
   );
 }

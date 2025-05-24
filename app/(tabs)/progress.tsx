@@ -4,23 +4,26 @@ import {
   StyleSheet,
   FlatList,
   RefreshControl,
-  ScrollView,
   Dimensions,
 } from "react-native";
 import {
   Text,
-  Card,
   ActivityIndicator,
-  Divider,
-  Title,
-  Paragraph,
-  Caption,
-  Button,
+  useTheme,
+  Badge,
   IconButton,
 } from "react-native-paper";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { getDailyProgressHistory } from "../../src/api/progressApi";
 import { Database } from "../../src/types/database.types";
+import {
+  StyledCard,
+  CardContent,
+} from "../../src/components/common/StyledCard";
+import { StyledButton } from "../../src/components/common/StyledButton";
+import StyledHeader from "../../src/components/common/StyledHeader";
+import { LinearGradient } from "expo-linear-gradient";
+import type { AppTheme } from "../../src/constants/theme";
 
 // Define types for clarity
 type DailyProgressRow = Database["public"]["Tables"]["daily_progress"]["Row"];
@@ -128,6 +131,7 @@ const groupProgressByWeek = (
  */
 export default function ProgressScreen() {
   const { user } = useAuth();
+  const theme = useTheme<AppTheme>();
   const [progressHistory, setProgressHistory] = useState<
     DailyProgressHistoryEntry[]
   >([]);
@@ -136,7 +140,6 @@ export default function ProgressScreen() {
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [currentWeekIndex, setCurrentWeekIndex] = useState(0);
-  const screenWidth = Dimensions.get("window").width;
 
   const fetchHistory = useCallback(
     async (isRefresh = false) => {
@@ -200,6 +203,56 @@ export default function ProgressScreen() {
     }
   };
 
+  const getStatusColor = (status: string | null) => {
+    switch (status) {
+      case "completed":
+        return {
+          gradient: [theme.colors.success500, theme.colors.success600] as [
+            string,
+            string
+          ],
+          badge: {
+            bg: theme.colors.success100,
+            text: theme.colors.onSurface,
+          },
+        };
+      case "skipped":
+        return {
+          gradient: [theme.colors.purple500, theme.colors.purple600] as [
+            string,
+            string
+          ],
+          badge: {
+            bg: theme.colors.purple100,
+            text: theme.colors.onSurface,
+          },
+        };
+      case "failed":
+      case "missed":
+        return {
+          gradient: [theme.colors.warning500, theme.colors.warning600] as [
+            string,
+            string
+          ],
+          badge: {
+            bg: theme.colors.warning100,
+            text: theme.colors.onSurface,
+          },
+        };
+      default:
+        return {
+          gradient: [
+            theme.colors.customMuted,
+            theme.colors.customMutedForeground,
+          ] as [string, string],
+          badge: {
+            bg: theme.colors.customMuted,
+            text: theme.colors.onSurface,
+          },
+        };
+    }
+  };
+
   const renderProgressItem = ({
     item,
   }: {
@@ -219,50 +272,79 @@ export default function ProgressScreen() {
       if (parts.length > 0) progressDetails = parts.join(", ");
     }
 
+    const statusColors = getStatusColor(item.status);
+    const isCompleted = item.status === "completed";
+
     return (
-      <Card style={styles.card}>
-        <Card.Content>
-          <Title>{formatReadableDate(item.date)}</Title>
-          <Paragraph>
-            Status:{" "}
-            <Text
-              style={{
-                fontWeight: "bold",
-                color:
-                  item.status === "completed"
-                    ? "green"
-                    : item.status === "skipped"
-                    ? "purple"
-                    : item.status === "missed"
-                    ? "red"
-                    : "orange",
-              }}
-            >
-              {item.status || "N/A"}
-            </Text>
-          </Paragraph>
-          {goalInfo && (
-            <Paragraph>
-              Goal: {goalInfo.goal_type} - {goalInfo.target_value}{" "}
-              {goalInfo.target_unit}
-            </Paragraph>
-          )}
-          <Caption>Progress: {progressDetails}</Caption>
-          <Caption>
-            Synced:{" "}
-            {item.last_fetched_from_healthkit
-              ? new Date(item.last_fetched_from_healthkit).toLocaleString()
-              : "N/A"}
-          </Caption>
-        </Card.Content>
-      </Card>
+      <StyledCard style={styles.card} withShadow>
+        <View style={styles.cardContentWrapper}>
+          {/* Status Indicator */}
+          <LinearGradient
+            colors={statusColors.gradient}
+            style={styles.statusIndicator}
+          >
+            <IconButton
+              icon={isCompleted ? "check-circle" : "close-circle"}
+              iconColor="white"
+              size={24}
+            />
+          </LinearGradient>
+
+          {/* Content */}
+          <CardContent style={styles.cardContent}>
+            <View style={styles.cardHeader}>
+              <Text variant="titleLarge" style={styles.dateText}>
+                {formatReadableDate(item.date)}
+              </Text>
+              <Text
+                style={{
+                  backgroundColor: statusColors.badge.bg,
+                  color: theme.colors.onSurface,
+                  paddingHorizontal: 8,
+                  paddingVertical: 2,
+                  borderRadius: 4,
+                  fontSize: 12,
+                  fontWeight: "500",
+                  alignSelf: "flex-start",
+                }}
+              >
+                {`Status: ${item.status || "N/A"}`}
+              </Text>
+            </View>
+
+            <View style={styles.cardDetails}>
+              {goalInfo && (
+                <Text style={styles.detailText}>
+                  <Text style={styles.detailLabel}>Goal:</Text>{" "}
+                  {goalInfo.goal_type} - {goalInfo.target_value}{" "}
+                  {goalInfo.target_unit}
+                </Text>
+              )}
+              <Text style={styles.detailText}>
+                <Text style={styles.detailLabel}>Progress:</Text>{" "}
+                {progressDetails}
+              </Text>
+              <Text style={styles.syncedText}>
+                <Text style={styles.detailLabel}>Synced:</Text>{" "}
+                {item.last_fetched_from_healthkit
+                  ? new Date(item.last_fetched_from_healthkit).toLocaleString()
+                  : "N/A"}
+              </Text>
+            </View>
+          </CardContent>
+        </View>
+      </StyledCard>
     );
   };
 
   if (isLoading && progressHistory.length === 0) {
     return (
       <View style={styles.centeredContainer}>
-        <ActivityIndicator animating={true} size="large" />
+        <ActivityIndicator
+          animating={true}
+          size="large"
+          color={theme.colors.primary}
+        />
         <Text style={styles.loadingText}>Loading progress history...</Text>
       </View>
     );
@@ -271,10 +353,16 @@ export default function ProgressScreen() {
   if (error && progressHistory.length === 0) {
     return (
       <View style={styles.centeredContainer}>
-        <Text style={styles.errorText}>{error}</Text>
-        <Button onPress={() => fetchHistory()} mode="outlined">
+        <Text style={[styles.errorText, { color: theme.colors.error }]}>
+          {error}
+        </Text>
+        <StyledButton
+          onPress={() => fetchHistory()}
+          variant="outline"
+          style={{ marginTop: 16 }}
+        >
           Retry
-        </Button>
+        </StyledButton>
       </View>
     );
   }
@@ -282,15 +370,17 @@ export default function ProgressScreen() {
   if (progressHistory.length === 0) {
     return (
       <View style={styles.centeredContainer}>
-        <Text>No progress history found.</Text>
-        <Text>Complete some daily goals to see your history here.</Text>
-        <Button
+        <Text style={styles.emptyStateTitle}>No progress history found.</Text>
+        <Text style={styles.emptyStateDescription}>
+          Complete some daily goals to see your history here.
+        </Text>
+        <StyledButton
           onPress={() => fetchHistory()}
-          mode="text"
-          style={{ marginTop: 10 }}
+          variant="ghost"
+          style={{ marginTop: 16 }}
         >
           Refresh
-        </Button>
+        </StyledButton>
       </View>
     );
   }
@@ -298,40 +388,71 @@ export default function ProgressScreen() {
   // Render week carousel with navigation
   return (
     <View style={styles.container}>
-      <Text variant="headlineSmall" style={styles.header}>
-        Your Weekly Progress
-      </Text>
+      <StyledHeader title="Progress" />
 
-      {weeklyGroups.length > 0 && (
-        <View style={styles.weekNavigator}>
-          <IconButton
-            icon="chevron-left"
-            disabled={currentWeekIndex >= weeklyGroups.length - 1}
-            onPress={goToPreviousWeek}
-          />
-          <Text style={styles.weekTitle}>
-            {formatReadableDate(weeklyGroups[currentWeekIndex].weekStart)} -{" "}
-            {formatReadableDate(weeklyGroups[currentWeekIndex].weekEnd)}
-          </Text>
-          <IconButton
-            icon="chevron-right"
-            disabled={currentWeekIndex <= 0}
-            onPress={goToNextWeek}
-          />
-        </View>
-      )}
+      <LinearGradient
+        colors={
+          [theme.colors.purple50, theme.colors.customBackground] as [
+            string,
+            string
+          ]
+        }
+        style={styles.gradientBackground}
+      >
+        <Text variant="titleMedium" style={styles.subtitle}>
+          Your Weekly Progress
+        </Text>
 
-      <FlatList
-        data={
-          weeklyGroups.length > 0 ? weeklyGroups[currentWeekIndex].entries : []
-        }
-        renderItem={renderProgressItem}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContainer}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-      />
+        {weeklyGroups.length > 0 && (
+          <StyledCard style={styles.weekNavigatorCard} withShadow>
+            <CardContent style={styles.weekNavigator}>
+              <IconButton
+                icon="chevron-left"
+                disabled={currentWeekIndex >= weeklyGroups.length - 1}
+                onPress={goToPreviousWeek}
+                iconColor={theme.colors.onSurface}
+              />
+              <View style={styles.weekTitleContainer}>
+                <IconButton
+                  icon="calendar"
+                  size={18}
+                  iconColor={theme.colors.primary}
+                  style={styles.calendarIcon}
+                />
+                <Text style={styles.weekTitle}>
+                  {formatReadableDate(weeklyGroups[currentWeekIndex].weekStart)}{" "}
+                  - {formatReadableDate(weeklyGroups[currentWeekIndex].weekEnd)}
+                </Text>
+              </View>
+              <IconButton
+                icon="chevron-right"
+                disabled={currentWeekIndex <= 0}
+                onPress={goToNextWeek}
+                iconColor={theme.colors.onSurface}
+              />
+            </CardContent>
+          </StyledCard>
+        )}
+
+        <FlatList
+          data={
+            weeklyGroups.length > 0
+              ? weeklyGroups[currentWeekIndex].entries
+              : []
+          }
+          renderItem={renderProgressItem}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.listContainer}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[theme.colors.primary]}
+              tintColor={theme.colors.primary}
+            />
+          }
+        />
+      </LinearGradient>
     </View>
   );
 }
@@ -339,42 +460,104 @@ export default function ProgressScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: "white",
+  },
+  gradientBackground: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+  },
+  subtitle: {
+    textAlign: "center",
+    marginVertical: 16,
+    fontWeight: "bold",
   },
   listContainer: {
-    padding: 10,
+    paddingBottom: 20,
   },
   centeredContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
     padding: 20,
+    backgroundColor: "white",
   },
   card: {
-    marginBottom: 10,
-    elevation: 2,
+    marginBottom: 16,
+    overflow: "hidden",
+    borderRadius: 12,
+    elevation: 3,
   },
-  header: {
-    textAlign: "center",
-    marginVertical: 15,
+  cardContentWrapper: {
+    flexDirection: "row",
+  },
+  statusIndicator: {
+    width: 60,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  cardContent: {
+    flex: 1,
+    paddingVertical: 16,
+  },
+  cardHeader: {
+    marginBottom: 12,
+  },
+  dateText: {
     fontWeight: "bold",
+    marginBottom: 4,
+  },
+  cardDetails: {
+    gap: 4,
+  },
+  detailText: {
+    fontSize: 14,
+    marginBottom: 2,
+  },
+  detailLabel: {
+    fontWeight: "600",
+  },
+  syncedText: {
+    fontSize: 12,
+    opacity: 0.7,
+    marginTop: 4,
   },
   loadingText: {
-    marginTop: 10,
+    marginTop: 12,
   },
   errorText: {
-    color: "red",
-    marginBottom: 10,
+    marginBottom: 16,
     textAlign: "center",
+  },
+  emptyStateTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    marginBottom: 8,
+  },
+  emptyStateDescription: {
+    textAlign: "center",
+    opacity: 0.7,
+  },
+  weekNavigatorCard: {
+    marginBottom: 16,
+    borderRadius: 12,
   },
   weekNavigator: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 10,
-    marginBottom: 10,
+    paddingVertical: 4,
+  },
+  weekTitleContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  calendarIcon: {
+    margin: 0,
+    marginRight: 4,
   },
   weekTitle: {
-    fontWeight: "bold",
+    fontWeight: "600",
     fontSize: 16,
   },
 });
