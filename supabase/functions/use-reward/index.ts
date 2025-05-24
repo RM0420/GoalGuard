@@ -1,6 +1,12 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { corsHeaders } from "../_shared/cors.ts";
+// Define CORS headers inline to avoid import issues
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*", // Or your specific frontend URL for better security
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, GET, OPTIONS, PUT, DELETE",
+};
 
 // Define the expected request body structure
 interface UseRewardRequestBody {
@@ -31,6 +37,7 @@ serve(async (req: Request) => {
     const {
       data: { user },
     } = await supabaseClient.auth.getUser();
+
     if (!user) {
       return new Response(JSON.stringify({ error: "User not authenticated" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -118,6 +125,22 @@ serve(async (req: Request) => {
 
     switch (reward_type) {
       case "skip_day": {
+        // Fetch the active goal ID to associate with this skip
+        const { data: activeGoal, error: fetchGoalError } = await supabaseClient
+          .from("goals")
+          .select("id")
+          .eq("user_id", user.id)
+          .eq("is_active", true)
+          .single();
+
+        if (fetchGoalError) {
+          console.error(
+            "Error fetching active goal for skip day:",
+            fetchGoalError
+          );
+          // Continue with the skip even if we can't associate a goal_id
+        }
+
         const { error: skipError } = await supabaseClient
           .from("daily_progress")
           .upsert(
@@ -125,8 +148,7 @@ serve(async (req: Request) => {
               user_id: user.id,
               date: today,
               status: "skipped",
-              // goal_id is not set here, assuming schema allows it or it's set by a trigger/default.
-              // Or, it could be fetched if a goal is always expected to be active.
+              goal_id: activeGoal?.id || null, // Use the goal ID if available, otherwise null
             },
             { onConflict: "user_id,date" }
           );

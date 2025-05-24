@@ -430,11 +430,24 @@ export default function DashboardScreen() {
               </Text>
               {todaysProgress?.effective_target_value !== null &&
                 todaysProgress?.effective_target_value !== undefined && (
-                  <Chip icon="information" mode="outlined" style={styles.chip}>
+                  <Chip
+                    icon="arrow-down-circle"
+                    mode="outlined"
+                    style={styles.chip}
+                  >
                     Goal reduced by item! Original: {activeGoal.target_value}{" "}
                     {activeGoal.target_unit}
                   </Chip>
                 )}
+              {todaysProgress?.status === "skipped" && (
+                <Chip
+                  icon="calendar-check"
+                  mode="outlined"
+                  style={[styles.chip, styles.statusChipSkipped]}
+                >
+                  Skip Day Active
+                </Chip>
+              )}
               <Text style={styles.progressText}>{dailyProgressText}</Text>
               <Text>
                 Status: {currentDailyStatus}
@@ -462,7 +475,10 @@ export default function DashboardScreen() {
         </Card.Actions>
       </Card>
 
-      {(todaysProgress?.status === "skipped" || hasStreakSaver) && (
+      {(todaysProgress?.status === "skipped" ||
+        hasStreakSaver ||
+        (todaysProgress?.effective_target_value !== null &&
+          todaysProgress?.effective_target_value !== undefined)) && (
         <Card style={styles.card}>
           <Card.Title title="Active Rewards Info" />
           <Card.Content>
@@ -475,6 +491,17 @@ export default function DashboardScreen() {
                 Today's goal is SKIPPED
               </Chip>
             )}
+            {todaysProgress?.effective_target_value !== null &&
+              todaysProgress?.effective_target_value !== undefined && (
+                <Chip
+                  icon="arrow-down-circle"
+                  mode="flat"
+                  style={[styles.chip, { backgroundColor: "#bbdefb" }]}
+                >
+                  Goal reduced to {todaysProgress.effective_target_value}{" "}
+                  {todaysProgress.effective_target_unit}
+                </Chip>
+              )}
             {hasStreakSaver && (
               <Chip
                 icon="shield-check"
