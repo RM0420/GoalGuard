@@ -1,30 +1,32 @@
 import React, { useState, useEffect } from "react";
-import { View, StyleSheet, Alert, ScrollView } from "react-native";
+import {
+  View,
+  StyleSheet,
+  Alert,
+  ScrollView,
+  TouchableOpacity,
+} from "react-native";
 import {
   Text,
   TextInput,
   ActivityIndicator,
-  RadioButton,
-  Divider,
   useTheme,
 } from "react-native-paper";
 import { useAuth } from "../../src/contexts/AuthContext";
-import { getActiveGoal, setGoal, SetGoalData } from "../../src/api/goalsApi";
-import { Database } from "../../src/types/database.types"; // For Goal type
+import { useGoals } from "../../src/contexts/GoalsContext";
+import { CreateGoalData } from "../../src/api/goalsApi";
 import {
   StyledCard,
+  CardHeader,
   CardContent,
   CardTitle,
 } from "../../src/components/common/StyledCard";
 import { StyledButton } from "../../src/components/common/StyledButton";
 import { AppTheme } from "../../src/constants/theme";
-import StyledHeader from "../../src/components/common/StyledHeader";
-
-// Define Goal type based on Supabase schema
-type Goal = Database["public"]["Tables"]["goals"]["Row"];
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 
 /**
- * `GoalsScreen` - Allows users to set or update their daily physical goal.
+ * `GoalsScreen` - Allows users to set or update their persistent goal.
  * @returns {JSX.Element}
  */
 
@@ -37,13 +39,10 @@ const GOAL_TYPES = {
 
 export default function GoalsScreen() {
   const { user } = useAuth();
+  const { userGoal, isLoadingGoal, setUserGoal, updateUserGoal } = useGoals();
   const theme = useTheme<AppTheme>();
 
-  // State for the active goal and loading/submitting states
-  const [activeGoal, setActiveGoal] = useState<Goal | null | undefined>(
-    undefined
-  ); // undefined: not yet loaded, null: loaded and no active goal
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  // State for loading/submitting states
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   // Form state
@@ -55,71 +54,48 @@ export default function GoalsScreen() {
   );
   const [appsToBlockInput, setAppsToBlockInput] = useState<string>(""); // Comma-separated string
 
-  // Determine form mode based on whether an active goal exists
-  const formMode = activeGoal ? "edit" : "create";
+  // Determine form mode based on whether a goal exists
+  const formMode = userGoal ? "edit" : "create";
 
-  // Effect to fetch active goal on load or user change
+  // Effect to populate form when userGoal state changes
   useEffect(() => {
-    if (user) {
-      setIsLoading(true);
-      getActiveGoal(user)
-        .then(({ data, error }) => {
-          if (error) {
-            Alert.alert("Error", "Could not fetch your active goal.");
-            console.error("Error fetching active goal:", error);
-            setActiveGoal(null); // Assume no goal if error
-          } else {
-            setActiveGoal(data); // data can be Goal or null
-          }
-        })
-        .finally(() => {
-          setIsLoading(false);
-        });
-    } else {
-      setActiveGoal(null); // No user, no goal
-      setIsLoading(false);
-    }
-  }, [user]);
-
-  // Effect to populate form when activeGoal state changes
-  useEffect(() => {
-    if (activeGoal) {
+    if (userGoal) {
       const typeKey = Object.keys(GOAL_TYPES).find(
         (key) =>
           GOAL_TYPES[key as keyof typeof GOAL_TYPES].label
             .toLowerCase()
-            .replace(/ /g, "_") === activeGoal.goal_type ||
-          key === activeGoal.goal_type
+            .replace(/ /g, "_") === userGoal.goal_type ||
+          key === userGoal.goal_type
       ) as keyof typeof GOAL_TYPES | undefined;
 
       if (typeKey) setSelectedGoalTypeKey(typeKey);
       else setSelectedGoalTypeKey("steps"); // Default if type not found
 
-      setTargetValue(activeGoal.target_value?.toString() || "");
+      setTargetValue(userGoal.target_value?.toString() || "");
       setSelectedUnit(
-        activeGoal.target_unit || GOAL_TYPES[selectedGoalTypeKey].units[0]
+        userGoal.target_unit || GOAL_TYPES[selectedGoalTypeKey].units[0]
       );
       // Ensure apps_to_block is an array before joining, default to empty string
-      const apps = Array.isArray(activeGoal.apps_to_block)
-        ? activeGoal.apps_to_block.join(", ")
+      const apps = Array.isArray(userGoal.apps_to_block)
+        ? userGoal.apps_to_block.join(", ")
         : "";
       setAppsToBlockInput(apps);
     } else {
-      // Reset form for new goal entry if no active goal
+      // Reset form for new goal entry if no goal
       setSelectedGoalTypeKey("steps");
       setTargetValue("");
       setSelectedUnit(GOAL_TYPES.steps.units[0]);
       setAppsToBlockInput("");
     }
-  }, [activeGoal, selectedGoalTypeKey]); // Added selectedGoalTypeKey to deps for unit reset on type change with no activeGoal
+  }, [userGoal, selectedGoalTypeKey]); // Added selectedGoalTypeKey to deps for unit reset on type change with no userGoal
 
   // Update available units when goal type changes
   useEffect(() => {
-    // Only reset if not driven by activeGoal's initial population
-    if (!activeGoal || selectedGoalTypeKey !== activeGoal.goal_type) {
+    // Only reset if not driven by userGoal's initial population
+    if (!userGoal || selectedGoalTypeKey !== userGoal.goal_type) {
       setSelectedUnit(GOAL_TYPES[selectedGoalTypeKey].units[0]);
     }
-  }, [selectedGoalTypeKey, activeGoal]);
+  }, [selectedGoalTypeKey, userGoal]);
 
   const handleSaveGoal = async () => {
     if (!user) {
@@ -145,49 +121,27 @@ export default function GoalsScreen() {
       .map((app) => app.trim())
       .filter((app) => app !== "");
 
-    // Prepare payload for setGoal (persistent goal, no date)
-    const goalPayload: SetGoalData = {
+    // Prepare payload for persistent goal
+    const goalPayload: CreateGoalData = {
       goal_type: selectedGoalTypeKey,
       target_value: parseInt(targetValue, 10),
       target_unit: selectedUnit,
       apps_to_block: appsArray.length > 0 ? appsArray : null,
-      // Removed date field
     };
 
-    const { data: newGoal, error } = await setGoal(user, goalPayload);
-
-    if (error) {
-      Alert.alert(
-        "Error",
-        `Failed to ${formMode === "edit" ? "update" : "set"} goal. ${
-          error.message || ""
-        }`
-      );
-      console.error(
-        `Error ${formMode === "edit" ? "updating" : "setting"} goal:`,
-        error
-      );
-    } else if (newGoal) {
-      Alert.alert(
-        "Success",
-        `Goal successfully ${formMode === "edit" ? "updated" : "set"}!`
-      );
-      setActiveGoal(newGoal); // Update local state with the new/updated goal
-      // Optionally, could re-fetch with getActiveGoal(user) for absolute certainty
+    if (formMode === "edit" && userGoal) {
+      // Update existing goal
+      await updateUserGoal(userGoal.id, goalPayload);
     } else {
-      Alert.alert(
-        "Error",
-        `Failed to ${
-          formMode === "edit" ? "update" : "set"
-        } goal. No data returned.`
-      );
+      // Create new goal
+      await setUserGoal(goalPayload);
     }
 
     setIsSubmitting(false);
   };
 
-  if (isLoading || activeGoal === undefined) {
-    // Show loading if fetching or activeGoal is not yet determined
+  if (isLoadingGoal) {
+    // Show loading if fetching or userGoal is not yet determined
     return (
       <View style={styles.centered}>
         <ActivityIndicator
@@ -202,6 +156,47 @@ export default function GoalsScreen() {
     );
   }
 
+  const GoalTypeOption = ({
+    goalType,
+    label,
+    isSelected,
+    onSelect,
+  }: {
+    goalType: keyof typeof GOAL_TYPES;
+    label: string;
+    isSelected: boolean;
+    onSelect: () => void;
+  }) => (
+    <TouchableOpacity
+      style={[
+        styles.goalTypeOption,
+        isSelected
+          ? {
+              backgroundColor: theme.colors.purple50,
+              borderColor: theme.colors.purple200,
+            }
+          : {
+              borderColor: theme.colors.customBorder,
+            },
+      ]}
+      onPress={onSelect}
+      activeOpacity={0.7}
+    >
+      <View style={styles.goalTypeRadio}>
+        {isSelected ? (
+          <View style={styles.goalTypeRadioSelected}>
+            <MaterialCommunityIcons name="check" size={14} color="white" />
+          </View>
+        ) : (
+          <View style={styles.goalTypeRadioUnselected} />
+        )}
+      </View>
+      <View style={styles.goalTypeContent}>
+        <Text style={styles.goalTypeLabel}>{label}</Text>
+      </View>
+    </TouchableOpacity>
+  );
+
   return (
     <ScrollView
       style={styles.container}
@@ -211,149 +206,135 @@ export default function GoalsScreen() {
       ]}
     >
       {/* Header */}
-      <StyledHeader title="Goals" />
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Goals</Text>
+        <Text style={styles.headerSubtitle}>Set your daily targets</Text>
+      </View>
 
+      {/* Goal Setting Card */}
       <StyledCard withShadow style={styles.card}>
-        <CardTitle>
-          {formMode === "edit" ? "Edit Daily Goal" : "Set Daily Goal"}
-        </CardTitle>
+        <CardHeader>
+          <View style={styles.cardHeaderContent}>
+            <MaterialCommunityIcons
+              name="target"
+              size={20}
+              color={theme.colors.purple700}
+              style={styles.cardIcon}
+            />
+            <Text style={styles.cardTitle}>
+              {formMode === "edit" ? "Edit Daily Goal" : "Set Daily Goal"}
+            </Text>
+          </View>
+        </CardHeader>
         <CardContent>
-          <Text style={[styles.label, { color: theme.colors.onSurface }]}>
-            Select Goal Type:
-          </Text>
-          <RadioButton.Group
-            onValueChange={(newValue) =>
-              setSelectedGoalTypeKey(newValue as keyof typeof GOAL_TYPES)
-            }
-            value={selectedGoalTypeKey}
-          >
-            {Object.entries(GOAL_TYPES).map(([key, { label }]) => (
-              <View
-                key={key}
-                style={[
-                  styles.radioButtonItem,
-                  {
-                    backgroundColor:
-                      key === selectedGoalTypeKey
-                        ? theme.colors.purple50
-                        : theme.colors.surface,
-                    borderColor:
-                      key === selectedGoalTypeKey
-                        ? theme.colors.purple300
-                        : theme.colors.customBorder,
-                  },
-                ]}
-              >
-                <RadioButton
-                  value={key}
-                  disabled={isSubmitting}
-                  color={theme.colors.purple700}
-                />
-                <Text
-                  style={[
-                    styles.radioButtonLabel,
-                    { color: theme.colors.onSurface },
-                  ]}
-                >
-                  {label}
-                </Text>
-              </View>
-            ))}
-          </RadioButton.Group>
+          {/* Goal Type Selection */}
+          <View style={styles.formSection}>
+            <Text style={styles.sectionLabel}>Select Goal Type:</Text>
 
-          <Divider style={styles.divider} />
+            <View style={styles.goalTypeContainer}>
+              <GoalTypeOption
+                goalType="steps"
+                label="Steps"
+                isSelected={selectedGoalTypeKey === "steps"}
+                onSelect={() => setSelectedGoalTypeKey("steps")}
+              />
 
-          <Text style={[styles.label, { color: theme.colors.onSurface }]}>
-            {`Target ${GOAL_TYPES[selectedGoalTypeKey].label}`}
-          </Text>
-          <TextInput
-            value={targetValue}
-            onChangeText={setTargetValue}
-            keyboardType="numeric"
-            style={styles.input}
-            disabled={isSubmitting}
-            placeholder={`Enter target ${GOAL_TYPES[
-              selectedGoalTypeKey
-            ].label.toLowerCase()}`}
-            placeholderTextColor={theme.colors.customMutedForeground}
-            mode="outlined"
-            outlineColor={theme.colors.customBorder}
-            activeOutlineColor={theme.colors.purple600}
-          />
+              <GoalTypeOption
+                goalType="run_distance"
+                label="Running Distance"
+                isSelected={selectedGoalTypeKey === "run_distance"}
+                onSelect={() => setSelectedGoalTypeKey("run_distance")}
+              />
+            </View>
+          </View>
 
-          {GOAL_TYPES[selectedGoalTypeKey].units.length > 1 && (
-            <>
-              <Text style={[styles.label, { color: theme.colors.onSurface }]}>
-                Select Unit:
-              </Text>
-              <RadioButton.Group
-                onValueChange={(newValue) => setSelectedUnit(newValue)}
-                value={selectedUnit}
-              >
-                {GOAL_TYPES[selectedGoalTypeKey].units.map((unit) => (
-                  <View
+          {/* Target Value Input */}
+          <View style={styles.formSection}>
+            <Text style={styles.sectionLabel}>
+              Target {selectedGoalTypeKey === "steps" ? "Steps" : "Distance"}:
+            </Text>
+            <TextInput
+              style={styles.input}
+              keyboardType="number-pad"
+              value={targetValue}
+              onChangeText={setTargetValue}
+              placeholder={
+                selectedGoalTypeKey === "steps" ? "e.g., 10000" : "e.g., 5"
+              }
+              mode="outlined"
+              outlineColor={theme.colors.customBorder}
+              activeOutlineColor={theme.colors.purple700}
+            />
+
+            {/* Unit Selection (only for distance) */}
+            {selectedGoalTypeKey === "run_distance" && (
+              <View style={styles.unitContainer}>
+                {GOAL_TYPES.run_distance.units.map((unit) => (
+                  <TouchableOpacity
                     key={unit}
                     style={[
-                      styles.radioButtonItem,
-                      {
-                        backgroundColor:
-                          unit === selectedUnit
-                            ? theme.colors.purple50
-                            : theme.colors.surface,
-                        borderColor:
-                          unit === selectedUnit
-                            ? theme.colors.purple300
-                            : theme.colors.customBorder,
-                      },
+                      styles.unitButton,
+                      selectedUnit === unit
+                        ? {
+                            backgroundColor: theme.colors.purple100,
+                            borderColor: theme.colors.purple300,
+                          }
+                        : {
+                            borderColor: theme.colors.customBorder,
+                          },
                     ]}
+                    onPress={() => setSelectedUnit(unit)}
                   >
-                    <RadioButton
-                      value={unit}
-                      disabled={isSubmitting}
-                      color={theme.colors.purple700}
-                    />
                     <Text
                       style={[
-                        styles.radioButtonLabel,
-                        { color: theme.colors.onSurface },
+                        styles.unitButtonText,
+                        selectedUnit === unit
+                          ? { color: theme.colors.purple800 }
+                          : { color: theme.colors.onSurfaceVariant },
                       ]}
                     >
                       {unit}
                     </Text>
-                  </View>
+                  </TouchableOpacity>
                 ))}
-              </RadioButton.Group>
-              <Divider style={styles.divider} />
-            </>
-          )}
+              </View>
+            )}
+          </View>
 
-          <Text style={[styles.label, { color: theme.colors.onSurface }]}>
-            Apps to Block
-          </Text>
-          <TextInput
-            value={appsToBlockInput}
-            onChangeText={setAppsToBlockInput}
-            style={styles.input}
-            disabled={isSubmitting}
-            placeholder="Instagram, TikTok, YouTube"
-            placeholderTextColor={theme.colors.customMutedForeground}
-            mode="outlined"
-            outlineColor={theme.colors.customBorder}
-            activeOutlineColor={theme.colors.purple600}
-          />
+          {/* Apps to Block Input */}
+          <View style={styles.formSection}>
+            <Text style={styles.sectionLabel}>Apps to Block (Optional):</Text>
+            <Text style={styles.helperText}>
+              Enter app names separated by commas
+            </Text>
+            <TextInput
+              style={styles.input}
+              value={appsToBlockInput}
+              onChangeText={setAppsToBlockInput}
+              placeholder="Instagram, TikTok, YouTube"
+              mode="outlined"
+              multiline
+              numberOfLines={2}
+              outlineColor={theme.colors.customBorder}
+              activeOutlineColor={theme.colors.purple700}
+            />
+          </View>
 
+          {/* Update Button */}
           <StyledButton
             variant="default"
-            size="lg"
             onPress={handleSaveGoal}
-            loading={isSubmitting || isLoading}
-            disabled={isSubmitting || isLoading}
-            style={styles.button}
+            style={styles.updateButton}
+            loading={isSubmitting}
+            disabled={isSubmitting}
           >
-            {formMode === "edit" ? "Update Goal" : "Set Goal"}
+            {formMode === "edit" ? "Update Goal" : "Save Goal"}
           </StyledButton>
         </CardContent>
       </StyledCard>
+
+      {/* Bottom padding for navigation */}
+      <View style={styles.bottomPadding} />
     </ScrollView>
   );
 }
@@ -363,58 +344,117 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   contentContainer: {
-    padding: 16,
+    paddingHorizontal: 16,
     paddingBottom: 32,
   },
   centered: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    padding: 20,
   },
   header: {
-    marginBottom: 24,
     alignItems: "center",
+    paddingVertical: 24,
   },
   headerTitle: {
-    fontSize: 28,
-    fontWeight: "700",
-    marginBottom: 8,
+    fontSize: 24,
+    fontWeight: "bold",
+    color: "#1F2937", // slate-800
   },
   headerSubtitle: {
     fontSize: 16,
+    color: "#64748B", // slate-500
+    marginTop: 4,
   },
   card: {
     marginBottom: 16,
   },
-  label: {
-    fontSize: 16,
-    fontWeight: "600",
-    marginBottom: 12,
-    marginTop: 16,
-  },
-  input: {
-    marginBottom: 20,
-    fontSize: 16,
-    height: 56,
-  },
-  button: {
-    marginTop: 24,
-  },
-  radioButtonItem: {
+  cardHeaderContent: {
     flexDirection: "row",
     alignItems: "center",
+  },
+  cardIcon: {
+    marginRight: 8,
+  },
+  cardTitle: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#1F2937", // slate-800
+  },
+  formSection: {
+    marginBottom: 24,
+  },
+  sectionLabel: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#334155", // slate-700
     marginBottom: 12,
+  },
+  helperText: {
+    fontSize: 14,
+    color: "#64748B", // slate-500
+    marginBottom: 8,
+  },
+  goalTypeContainer: {
+    gap: 12,
+  },
+  goalTypeOption: {
+    flexDirection: "row",
+    alignItems: "center",
     padding: 12,
     borderRadius: 8,
     borderWidth: 1,
   },
-  radioButtonLabel: {
+  goalTypeRadio: {
+    marginRight: 12,
+  },
+  goalTypeRadioSelected: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: "#7C3AED", // purple-700
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  goalTypeRadioUnselected: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: "#CBD5E1", // slate-300
+  },
+  goalTypeContent: {
+    flex: 1,
+  },
+  goalTypeLabel: {
+    fontSize: 15,
+    fontWeight: "500",
+    color: "#334155", // slate-700
+  },
+  input: {
+    backgroundColor: "white",
     fontSize: 16,
-    marginLeft: 8,
+    padding: 4,
+  },
+  unitContainer: {
+    flexDirection: "row",
+    marginTop: 12,
+    gap: 12,
+  },
+  unitButton: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+  },
+  unitButtonText: {
+    fontSize: 14,
     fontWeight: "500",
   },
-  divider: {
-    marginVertical: 16,
+  updateButton: {
+    marginTop: 8,
+  },
+  bottomPadding: {
+    height: 80,
   },
 });

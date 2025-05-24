@@ -3,6 +3,7 @@ import { View, StatusBar } from "react-native";
 import { Slot, useRouter, useSegments } from "expo-router";
 import { AuthProvider, useAuth } from "../src/contexts/AuthContext";
 import { UserProfileProvider } from "../src/contexts/UserProfileContext";
+import { GoalsProvider } from "../src/contexts/GoalsContext";
 import { PaperProvider, ActivityIndicator, Text } from "react-native-paper";
 import { AppTheme } from "../src/constants/theme";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -116,17 +117,19 @@ const RootLayoutNav = () => {
 export default function RootLayout() {
   return (
     <SafeAreaProvider>
-      <StatusBar
-        barStyle="dark-content"
-        backgroundColor={AppTheme.colors.background}
-      />
-      <AuthProvider>
-        <UserProfileProvider>
-          <PaperProvider theme={AppTheme}>
-            <RootLayoutNav />
-          </PaperProvider>
-        </UserProfileProvider>
-      </AuthProvider>
+      <PaperProvider theme={AppTheme}>
+        <StatusBar
+          barStyle="dark-content"
+          backgroundColor={AppTheme.colors.background}
+        />
+        <AuthProvider>
+          <UserProfileProvider>
+            <GoalsProvider>
+              <RootLayoutNav />
+            </GoalsProvider>
+          </UserProfileProvider>
+        </AuthProvider>
+      </PaperProvider>
     </SafeAreaProvider>
   );
 }
