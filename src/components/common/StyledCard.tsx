@@ -1,201 +1,126 @@
-import React from "react";
-import { StyleSheet, View, ViewStyle, TextStyle } from "react-native";
-import { Card, useTheme, Text } from "react-native-paper";
-import type { AppTheme } from "../../constants/theme";
+import React, { ReactNode } from "react";
+import { View, StyleSheet, ViewStyle, Text, TextStyle } from "react-native";
+import { useTheme } from "react-native-paper";
+import { AppTheme } from "../../constants/theme";
 
-/**
- * Props for the StyledCard component
- */
-interface StyledCardProps {
-  /** Children to render inside the card */
-  children: React.ReactNode;
-  /** Optional custom style for the card */
-  style?: ViewStyle;
-  /** Whether to add a subtle shadow to the card */
+type CardProps = {
+  children: ReactNode;
   withShadow?: boolean;
-  /** Whether to add a border to the card */
-  withBorder?: boolean;
-}
+  style?: ViewStyle;
+  variant?: "default" | "gradient-purple" | "outline";
+};
 
-/**
- * A styled card component that follows the new UI design system
- * This component wraps React Native Paper's Card with custom styling
- */
-const StyledCard: React.FC<StyledCardProps> = ({
+export const StyledCard: React.FC<CardProps> = ({
   children,
+  withShadow = false,
   style,
-  withShadow = true,
-  withBorder = true,
+  variant = "default",
 }) => {
   const theme = useTheme<AppTheme>();
 
-  return (
-    <Card
-      style={[
-        styles.card,
-        {
-          backgroundColor: theme.colors.surface,
-          borderRadius: theme.roundness,
-          borderColor: theme.colors.outline,
-          borderWidth: withBorder ? 1 : 0,
-        },
-        withShadow && styles.cardShadow,
-        style,
-      ]}
-    >
-      {children}
-    </Card>
-  );
-};
-
-/**
- * Props for the CardTitle component
- */
-interface CardTitleProps {
-  /** Title text content */
-  children: React.ReactNode;
-  /** Optional custom style for the title */
-  style?: TextStyle;
-}
-
-/**
- * A styled card title component that matches the new UI design
- */
-const CardTitle: React.FC<CardTitleProps> = ({ children, style }) => {
-  const theme = useTheme<AppTheme>();
-
-  return (
-    <Card.Title
-      title={
-        <Text
-          variant="titleMedium"
-          style={[styles.title, { color: theme.colors.onSurface }, style]}
-        >
-          {children}
-        </Text>
-      }
-      titleStyle={styles.titleContainer}
-    />
-  );
-};
-
-/**
- * Props for the CardContent component
- */
-interface CardContentProps {
-  /** Content to display inside the card */
-  children: React.ReactNode;
-  /** Optional custom style for the content container */
-  style?: ViewStyle;
-}
-
-/**
- * A styled card content component that matches the new UI design
- */
-const CardContent: React.FC<CardContentProps> = ({ children, style }) => {
-  return (
-    <Card.Content style={[styles.content, style]}>{children}</Card.Content>
-  );
-};
-
-/**
- * Props for the CardDescription component
- */
-interface CardDescriptionProps {
-  /** Description text content */
-  children: React.ReactNode;
-  /** Optional custom style for the description */
-  style?: TextStyle;
-}
-
-/**
- * A styled card description component that matches the new UI design
- */
-const CardDescription: React.FC<CardDescriptionProps> = ({
-  children,
-  style,
-}) => {
-  const theme = useTheme<AppTheme>();
-
-  return (
-    <Text
-      variant="bodyMedium"
-      style={[
-        styles.description,
-        { color: theme.colors.customMutedForeground },
-        style,
-      ]}
-    >
-      {children}
-    </Text>
-  );
-};
-
-/**
- * Props for the CardFooter component
- */
-interface CardFooterProps {
-  /** Footer content */
-  children: React.ReactNode;
-  /** Optional custom style for the footer */
-  style?: ViewStyle;
-}
-
-/**
- * A styled card footer component that matches the new UI design
- */
-const CardFooter: React.FC<CardFooterProps> = ({ children, style }) => {
-  const theme = useTheme<AppTheme>();
+  const getCardStyle = () => {
+    if (variant === "gradient-purple") {
+      return {
+        backgroundColor: theme.colors.purple700,
+      };
+    } else if (variant === "outline") {
+      return {
+        backgroundColor: theme.colors.surface,
+        borderWidth: 1,
+        borderColor: theme.colors.outlineVariant,
+      };
+    } else {
+      return {
+        backgroundColor: theme.colors.surface,
+      };
+    }
+  };
 
   return (
     <View
-      style={[
-        styles.footer,
-        { borderTopColor: theme.colors.customBorder },
-        style,
-      ]}
+      style={[styles.card, getCardStyle(), withShadow && styles.shadow, style]}
     >
       {children}
     </View>
   );
 };
 
+export const CardHeader: React.FC<{
+  children: ReactNode;
+  style?: ViewStyle;
+}> = ({ children, style }) => {
+  return <View style={[styles.header, style]}>{children}</View>;
+};
+
+export const CardTitle: React.FC<{
+  children: ReactNode;
+  style?: TextStyle;
+}> = ({ children, style }) => {
+  const theme = useTheme<AppTheme>();
+  return (
+    <View style={styles.titleContainer}>
+      {typeof children === "string" ? (
+        <View style={styles.textTitleContainer}>
+          <View style={styles.titleBar} />
+          <Text style={[styles.titleText, style]}>{children}</Text>
+        </View>
+      ) : (
+        children
+      )}
+    </View>
+  );
+};
+
+export const CardContent: React.FC<{
+  children: ReactNode;
+  style?: ViewStyle;
+}> = ({ children, style }) => {
+  return <View style={[styles.content, style]}>{children}</View>;
+};
+
 const styles = StyleSheet.create({
   card: {
-    marginVertical: 8,
+    borderRadius: 16,
     overflow: "hidden",
+    marginBottom: 16,
+    borderWidth: 0,
   },
-  cardShadow: {
+  shadow: {
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
     shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  header: {
+    padding: 16,
+    paddingBottom: 8,
   },
   titleContainer: {
-    marginBottom: 0,
-    paddingBottom: 0,
-  },
-  title: {
-    fontWeight: "600",
-    marginBottom: 4,
-  },
-  content: {
+    marginBottom: 8,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingTop: 16,
   },
-  description: {
-    marginTop: 4,
-  },
-  footer: {
+  textTitleContainer: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "flex-end",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderTopWidth: 1,
+  },
+  titleBar: {
+    width: 4,
+    height: 20,
+    backgroundColor: "#7C3AED", // Purple color
+    borderRadius: 2,
+    marginRight: 8,
+  },
+  titleText: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#1F2937", // slate-800
+  },
+  content: {
+    padding: 16,
   },
 });
-
-export { StyledCard, CardTitle, CardContent, CardDescription, CardFooter };
-export default StyledCard;

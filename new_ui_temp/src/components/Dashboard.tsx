@@ -1,10 +1,17 @@
-
-import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
-import { Coins, Target, Zap, RefreshCw, Trophy, User2, HelpCircle } from 'lucide-react';
+import React from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
+import {
+  Coins,
+  Target,
+  Zap,
+  RefreshCw,
+  Trophy,
+  User2,
+  HelpCircle,
+} from "lucide-react";
 
 const Dashboard = () => {
   const currentSteps = 9939;
@@ -16,9 +23,7 @@ const Dashboard = () => {
       <div className="max-w-md mx-auto space-y-6">
         {/* Header */}
         <div className="text-center py-6">
-          <h1 className="text-3xl font-bold text-slate-800">
-            Dashboard
-          </h1>
+          <h1 className="text-3xl font-bold text-slate-800">Dashboard</h1>
         </div>
 
         {/* User Profile Card */}
@@ -48,14 +53,21 @@ const Dashboard = () => {
         </Card>
 
         {/* Today's Goal Card */}
-        <Card className="border-none shadow-lg animate-fade-in" style={{ animationDelay: '0.1s' }}>
+        <Card
+          className="border-none shadow-lg animate-fade-in"
+          style={{ animationDelay: "0.1s" }}
+        >
           <CardHeader className="pb-4">
             <div className="flex items-center justify-between">
               <CardTitle className="flex items-center space-x-2 text-slate-800">
                 <Target className="h-5 w-5 text-purple-600" />
                 <span>Today's Goal</span>
               </CardTitle>
-              <Button variant="ghost" size="sm" className="text-purple-600 hover:text-purple-700">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-purple-600 hover:text-purple-700"
+              >
                 <RefreshCw className="h-4 w-4 mr-1" />
                 Refresh Data
               </Button>
@@ -63,19 +75,30 @@ const Dashboard = () => {
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <h3 className="text-xl font-semibold text-slate-700 mb-4">Walk/Run 15000 steps</h3>
-              
+              <h3 className="text-xl font-semibold text-slate-700 mb-4">
+                Walk/Run 15000 steps
+              </h3>
+
               <div className="space-y-3">
                 <div className="flex items-end space-x-2">
-                  <span className="text-4xl font-bold text-purple-600">{currentSteps.toLocaleString()}</span>
-                  <span className="text-xl text-slate-500 pb-1">/ {targetSteps.toLocaleString()} steps</span>
+                  <span className="text-4xl font-bold text-purple-600">
+                    {currentSteps.toLocaleString()}
+                  </span>
+                  <span className="text-xl text-slate-500 pb-1">
+                    / {targetSteps.toLocaleString()} steps
+                  </span>
                 </div>
-                
+
                 <Progress value={progressPercentage} className="h-3" />
-                
+
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-slate-600">{progressPercentage}% complete</span>
-                  <Badge variant="outline" className="border-yellow-500 text-yellow-700 bg-yellow-50">
+                  <span className="text-sm text-slate-600">
+                    {progressPercentage}% complete
+                  </span>
+                  <Badge
+                    variant="outline"
+                    className="border-yellow-500 text-yellow-700 bg-yellow-50"
+                  >
                     <HelpCircle className="h-3 w-3 mr-1" />
                     Status: Pending
                   </Badge>
@@ -86,7 +109,10 @@ const Dashboard = () => {
         </Card>
 
         {/* Active Rewards Card */}
-        <Card className="border-none shadow-lg animate-fade-in" style={{ animationDelay: '0.2s' }}>
+        <Card
+          className="border-none shadow-lg animate-fade-in"
+          style={{ animationDelay: "0.2s" }}
+        >
           <CardHeader>
             <CardTitle className="flex items-center space-x-2 text-slate-800">
               <Trophy className="h-5 w-5 text-green-600" />
@@ -104,7 +130,10 @@ const Dashboard = () => {
         </Card>
 
         {/* Sign Out Button */}
-        <Card className="border-none shadow-lg animate-fade-in" style={{ animationDelay: '0.3s' }}>
+        <Card
+          className="border-none shadow-lg animate-fade-in"
+          style={{ animationDelay: "0.3s" }}
+        >
           <CardContent className="p-4">
             <Button className="w-full bg-red-500 hover:bg-red-600 text-white font-medium py-3">
               Sign Out
