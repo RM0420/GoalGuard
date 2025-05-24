@@ -16,6 +16,9 @@ export default function SignUpScreen() {
   const [password, setPassword] = useState<string>("");
   const [confirmPassword, setConfirmPassword] = useState<string>("");
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [passwordVisible, setPasswordVisible] = useState<boolean>(false);
+  const [confirmPasswordVisible, setConfirmPasswordVisible] =
+    useState<boolean>(false);
   const { signUpWithEmail } = useAuth();
   const router = useRouter();
 
@@ -89,15 +92,15 @@ export default function SignUpScreen() {
           value={password}
           onChangeText={setPassword}
           style={styles.input}
-          secureTextEntry
+          secureTextEntry={!passwordVisible}
           disabled={isLoading}
           mode="outlined"
           outlineColor={AppTheme.colors.customBorder}
           activeOutlineColor={AppTheme.colors.purple700}
           right={
             <TextInput.Icon
-              icon="eye"
-              onPress={() => {}} // Toggle password visibility (to be implemented)
+              icon={passwordVisible ? "eye-off" : "eye"}
+              onPress={() => setPasswordVisible(!passwordVisible)}
             />
           }
         />
@@ -107,15 +110,15 @@ export default function SignUpScreen() {
           value={confirmPassword}
           onChangeText={setConfirmPassword}
           style={styles.input}
-          secureTextEntry
+          secureTextEntry={!confirmPasswordVisible}
           disabled={isLoading}
           mode="outlined"
           outlineColor={AppTheme.colors.customBorder}
           activeOutlineColor={AppTheme.colors.purple700}
           right={
             <TextInput.Icon
-              icon="eye"
-              onPress={() => {}} // Toggle password visibility (to be implemented)
+              icon={confirmPasswordVisible ? "eye-off" : "eye"}
+              onPress={() => setConfirmPasswordVisible(!confirmPasswordVisible)}
             />
           }
         />

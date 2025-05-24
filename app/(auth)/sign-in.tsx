@@ -15,6 +15,7 @@ export default function SignInScreen() {
   const [email, setEmail] = useState<string>("");
   const [password, setPassword] = useState<string>("");
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [passwordVisible, setPasswordVisible] = useState<boolean>(false);
   const { signInWithEmail } = useAuth();
   const router = useRouter();
 
@@ -79,15 +80,15 @@ export default function SignInScreen() {
           value={password}
           onChangeText={setPassword}
           style={styles.input}
-          secureTextEntry
+          secureTextEntry={!passwordVisible}
           disabled={isLoading}
           mode="outlined"
           outlineColor={AppTheme.colors.customBorder}
           activeOutlineColor={AppTheme.colors.purple700}
           right={
             <TextInput.Icon
-              icon="eye"
-              onPress={() => {}} // Toggle password visibility (to be implemented)
+              icon={passwordVisible ? "eye-off" : "eye"}
+              onPress={() => setPasswordVisible(!passwordVisible)}
             />
           }
         />

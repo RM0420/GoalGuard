@@ -425,7 +425,10 @@ export default function DashboardScreen() {
                   </View>
                   <Text style={styles.welcomeText}>
                     Welcome,{" "}
-                    {user?.user_metadata?.name || user?.email || "User"}
+                    {user?.user_metadata?.username ||
+                      user?.user_metadata?.name ||
+                      user?.email?.split("@")[0] ||
+                      "User"}
                   </Text>
                 </View>
 
@@ -443,7 +446,9 @@ export default function DashboardScreen() {
                       {profile?.coin_balance || 0}
                     </Text>
                   </View>
+                </View>
 
+                <View style={styles.statsRow}>
                   <View style={styles.statItem}>
                     <View style={styles.statIconLabel}>
                       <MaterialCommunityIcons
@@ -691,6 +696,7 @@ const styles = StyleSheet.create({
   statsRow: {
     flexDirection: "row",
     justifyContent: "space-between",
+    marginBottom: 12,
   },
   statItem: {
     flexDirection: "row",
