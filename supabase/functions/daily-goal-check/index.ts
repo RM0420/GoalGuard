@@ -95,6 +95,7 @@ serve(async (req: Request) => {
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
     const yesterdayDateString = yesterday.toISOString().split("T")[0];
+    const today = new Date().toISOString().split("T")[0];
 
     console.log(`Daily goal check running for date: ${yesterdayDateString}`);
 
@@ -355,6 +356,48 @@ serve(async (req: Request) => {
             `Error inserting daily_progress for user ${userId}: ${insertProgressError.message}`
           );
       }
+
+      // 6. Create new daily progress entry for today
+      if (activeGoalForDay) {
+        // Check if today's entry already exists
+        const { data: todayProgress, error: todayCheckError } =
+          await supabaseAdminClient
+            .from("daily_progress")
+            .select("id")
+            .eq("user_id", userId)
+            .eq("date", today)
+            .maybeSingle();
+
+        if (todayCheckError) {
+          console.error(
+            `Error checking today's progress for user ${userId}:`,
+            todayCheckError
+          );
+        } else if (!todayProgress) {
+          // Create new entry for today
+          const { error: createTodayError } = await supabaseAdminClient
+            .from("daily_progress")
+            .insert({
+              user_id: userId,
+              goal_id: activeGoalForDay.id,
+              date: today,
+              status: "pending",
+              progress_data: {}, // Empty initial progress
+            });
+
+          if (createTodayError) {
+            console.error(
+              `Error creating today's progress for user ${userId}:`,
+              createTodayError
+            );
+          } else {
+            console.log(
+              `Created new daily progress entry for user ${userId} for ${today}`
+            );
+          }
+        }
+      }
+
       console.log(
         `Finished processing for user ${userId}. New streak: ${currentStreak}, New coins: ${newCoinBalance}`
       );
