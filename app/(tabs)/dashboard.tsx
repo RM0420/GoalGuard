@@ -22,6 +22,7 @@ import Badge from "../../src/components/common/Badge";
 import { AppTheme } from "../../src/constants/theme";
 import { useRouter } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { supabase } from "../../src/lib/supabaseClient";
 
 type Goal = Database["public"]["Tables"]["goals"]["Row"];
 type DailyProgress = Database["public"]["Tables"]["daily_progress"]["Row"];
@@ -67,6 +68,39 @@ export default function DashboardScreen() {
     refreshData,
   } = useMockHealthKit();
 
+  const [hasStreakSaver, setHasStreakSaver] = useState(false);
+
+  // Fetch user's streak saver status
+  const fetchStreakSaverStatus = useCallback(async () => {
+    if (!user) return;
+
+    try {
+      // Check if user has streak savers in inventory
+      const { data: userRewards, error: rewardsError } = await supabase
+        .from("user_owned_rewards")
+        .select("quantity")
+        .eq("user_id", user.id)
+        .eq("reward_type", "streak_saver")
+        .single();
+
+      if (rewardsError && rewardsError.code !== "PGRST116") {
+        console.error("Error fetching streak saver status:", rewardsError);
+      }
+
+      // User has streak savers in inventory
+      if (userRewards && userRewards.quantity > 0) {
+        setHasStreakSaver(true);
+        return;
+      }
+
+      // No streak savers in inventory, reset state
+      setHasStreakSaver(false);
+    } catch (error) {
+      console.error("Error checking streak saver status:", error);
+      setHasStreakSaver(false);
+    }
+  }, [user]);
+
   // Calculate progress percentage
   const calculateProgress = useCallback(() => {
     if (!userGoal) return 0;
@@ -94,8 +128,15 @@ export default function DashboardScreen() {
       const todayStr = new Date().toISOString().split("T")[0];
       fetchDailyProgress(todayStr);
       refreshData();
+      fetchStreakSaverStatus();
     }
-  }, [user, fetchUserGoal, fetchDailyProgress, refreshData]);
+  }, [
+    user,
+    fetchUserGoal,
+    fetchDailyProgress,
+    refreshData,
+    fetchStreakSaverStatus,
+  ]);
 
   // Effect to refresh data when component mounts
   useEffect(() => {
@@ -289,10 +330,18 @@ export default function DashboardScreen() {
           </View>
         </CardHeader>
         <CardContent>
-          <View style={styles.activeRewardBadge}>
-            <View style={styles.activeRewardDot} />
-            <Text style={styles.activeRewardText}>Streak Saver is ACTIVE</Text>
-          </View>
+          {hasStreakSaver ? (
+            <View style={styles.activeRewardBadge}>
+              <View style={styles.activeRewardDot} />
+              <Text style={styles.activeRewardText}>
+                Streak Saver is ACTIVE
+              </Text>
+            </View>
+          ) : (
+            <Text style={styles.noActiveRewardsText}>
+              No active rewards. Visit the store to purchase rewards!
+            </Text>
+          )}
         </CardContent>
       </StyledCard>
 
@@ -519,5 +568,11 @@ const styles = StyleSheet.create({
   },
   bottomPadding: {
     height: 80,
+  },
+  noActiveRewardsText: {
+    fontSize: 14,
+    color: "#64748B", // slate-500
+    textAlign: "center",
+    padding: 12,
   },
 });

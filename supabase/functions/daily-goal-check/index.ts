@@ -19,6 +19,7 @@ interface UserProfileAndStats {
   coin_balance: number;
   current_streak_length: number;
   updated_at: string;
+  disable_streak_saver?: boolean;
 }
 
 interface DailyProgress {
@@ -77,6 +78,46 @@ const logCoinTransaction = async (
   }
 };
 
+// Helper function to get date in specific timezone safely
+function getDateInTimezone(date = new Date(), timezone = "America/New_York") {
+  try {
+    // Use the Intl API to safely get date parts in the target timezone
+    const formatter = new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+
+    const parts = formatter.formatToParts(date);
+    const month = parts.find((part) => part.type === "month")?.value || "01";
+    const day = parts.find((part) => part.type === "day")?.value || "01";
+    const year = parts.find((part) => part.type === "year")?.value || "2023";
+
+    return `${year}-${month}-${day}`;
+  } catch (error) {
+    console.error("Error in getDateInTimezone:", error);
+    // Fallback to UTC date if there's an error
+    return date.toISOString().split("T")[0];
+  }
+}
+
+// Calculate yesterday and today in the reference timezone safely
+const referenceTimezone = "America/New_York"; // Change to your users' primary timezone
+
+// Get today's date in the reference timezone
+const today = getDateInTimezone(new Date(), referenceTimezone);
+
+// Get yesterday's date by subtracting one day from today
+const yesterday = new Date();
+yesterday.setDate(yesterday.getDate() - 1);
+const yesterdayDateString = getDateInTimezone(yesterday, referenceTimezone);
+
+console.log(`Function running at UTC time: ${new Date().toISOString()}`);
+console.log(`Reference timezone: ${referenceTimezone}`);
+console.log(`Yesterday in reference timezone: ${yesterdayDateString}`);
+console.log(`Today in reference timezone: ${today}`);
+
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -92,17 +133,14 @@ serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "" // Use Service Role Key for admin tasks
     );
 
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayDateString = yesterday.toISOString().split("T")[0];
-    const today = new Date().toISOString().split("T")[0];
-
     console.log(`Daily goal check running for date: ${yesterdayDateString}`);
 
     const { data: usersWithProfiles, error: fetchUsersError } =
       await supabaseAdminClient
         .from("user_profile_and_stats")
-        .select("user_id, current_streak_length, coin_balance");
+        .select(
+          "user_id, current_streak_length, coin_balance, disable_streak_saver"
+        );
 
     if (fetchUsersError) {
       console.error("Error fetching users with profiles:", fetchUsersError);
@@ -254,63 +292,76 @@ serve(async (req: Request) => {
         console.log(
           `User ${userId} did NOT meet goal on ${yesterdayDateString}. Current streak: ${currentStreak}.`
         );
-        // Try to use Streak Saver
-        const { data: streakSavers, error: fetchSaverError } =
-          await supabaseAdminClient
-            .from("user_owned_rewards")
-            .select("id, quantity")
-            .eq("user_id", userId)
-            .eq("reward_type", "streak_saver")
-            .gt("quantity", 0)
-            .limit(1);
 
-        if (fetchSaverError) {
-          console.error(
-            `Error fetching streak saver for user ${userId}:`,
-            fetchSaverError
-          );
-          // Proceed to reset streak if saver check fails
+        // Check if streak saver is disabled for this user
+        const streakSaverDisabled = userProfile.disable_streak_saver === true;
+
+        if (streakSaverDisabled) {
+          // Skip streak saver logic if disabled for testing
           console.log(
-            `Resetting streak for user ${userId} due to missed goal and saver check error.`
+            `Streak saver disabled for user ${userId}. Resetting streak due to missed goal.`
           );
           currentStreak = 0;
           finalGoalStatusToday = "missed";
-        } else if (streakSavers && streakSavers.length > 0) {
-          const saver = streakSavers[0] as UserOwnedReward;
-          console.log(
-            `User ${userId} using streak saver. Streak maintained at ${currentStreak}.`
-          );
-          finalGoalStatusToday = "failed_streak_saved";
-
-          // Consume streak saver
-          if (saver.quantity === 1) {
-            await supabaseAdminClient
-              .from("user_owned_rewards")
-              .delete()
-              .match({ id: saver.id });
-          } else {
-            await supabaseAdminClient
-              .from("user_owned_rewards")
-              .update({ quantity: saver.quantity - 1 })
-              .match({ id: saver.id });
-          }
-          // Log its use
-          await supabaseAdminClient
-            .from("streak_savers_applied")
-            .insert({ user_id: userId, date_saved: yesterdayDateString });
-          await logCoinTransaction(
-            supabaseAdminClient,
-            userId,
-            0,
-            "streak_saver_auto_used",
-            `Streak saver automatically used for ${yesterdayDateString}`
-          );
         } else {
-          console.log(
-            `Resetting streak for user ${userId} due to missed goal and no saver.`
-          );
-          currentStreak = 0;
-          finalGoalStatusToday = "missed";
+          // Try to use Streak Saver
+          const { data: streakSavers, error: fetchSaverError } =
+            await supabaseAdminClient
+              .from("user_owned_rewards")
+              .select("id, quantity")
+              .eq("user_id", userId)
+              .eq("reward_type", "streak_saver")
+              .gt("quantity", 0)
+              .limit(1);
+
+          if (fetchSaverError) {
+            console.error(
+              `Error fetching streak saver for user ${userId}:`,
+              fetchSaverError
+            );
+            // Proceed to reset streak if saver check fails
+            console.log(
+              `Resetting streak for user ${userId} due to missed goal and saver check error.`
+            );
+            currentStreak = 0;
+            finalGoalStatusToday = "missed";
+          } else if (streakSavers && streakSavers.length > 0) {
+            const saver = streakSavers[0] as UserOwnedReward;
+            console.log(
+              `User ${userId} using streak saver. Streak maintained at ${currentStreak}.`
+            );
+            finalGoalStatusToday = "failed_streak_saved";
+
+            // Consume streak saver
+            if (saver.quantity === 1) {
+              await supabaseAdminClient
+                .from("user_owned_rewards")
+                .delete()
+                .match({ id: saver.id });
+            } else {
+              await supabaseAdminClient
+                .from("user_owned_rewards")
+                .update({ quantity: saver.quantity - 1 })
+                .match({ id: saver.id });
+            }
+            // Log its use
+            await supabaseAdminClient
+              .from("streak_savers_applied")
+              .insert({ user_id: userId, date_saved: yesterdayDateString });
+            await logCoinTransaction(
+              supabaseAdminClient,
+              userId,
+              0,
+              "streak_saver_auto_used",
+              `Streak saver automatically used for ${yesterdayDateString}`
+            );
+          } else {
+            console.log(
+              `Resetting streak for user ${userId} due to missed goal and no saver.`
+            );
+            currentStreak = 0;
+            finalGoalStatusToday = "missed";
+          }
         }
       }
 

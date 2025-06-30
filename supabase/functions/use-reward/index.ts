@@ -17,6 +17,31 @@ interface UseRewardRequestBody {
 // Define a more specific type for reward details if needed, matching enums.ts eventually
 // For now, using the string literal union type from UseRewardRequestBody.
 
+// Add the timezone helper function after imports
+// Helper function to get date in specific timezone safely
+function getDateInTimezone(date = new Date(), timezone = "America/New_York") {
+  try {
+    // Use the Intl API to safely get date parts in the target timezone
+    const formatter = new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+
+    const parts = formatter.formatToParts(date);
+    const month = parts.find((part) => part.type === "month")?.value || "01";
+    const day = parts.find((part) => part.type === "day")?.value || "01";
+    const year = parts.find((part) => part.type === "year")?.value || "2023";
+
+    return `${year}-${month}-${day}`;
+  } catch (error) {
+    console.error("Error in getDateInTimezone:", error);
+    // Fallback to UTC date if there's an error
+    return date.toISOString().split("T")[0];
+  }
+}
+
 serve(async (req: Request) => {
   // This is needed if you're planning to invoke your function from a browser.
   if (req.method === "OPTIONS") {
@@ -121,7 +146,11 @@ serve(async (req: Request) => {
     }
 
     // 2. Apply reward effect
-    const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+    const referenceTimezone = "America/New_York"; // Change to your users' primary timezone
+    const today = getDateInTimezone(new Date(), referenceTimezone);
+    console.log(`Function running at UTC time: ${new Date().toISOString()}`);
+    console.log(`Reference timezone: ${referenceTimezone}`);
+    console.log(`Today in reference timezone: ${today}`);
 
     switch (reward_type) {
       case "skip_day": {

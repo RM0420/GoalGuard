@@ -21,12 +21,7 @@ import {
   DailyProgress,
 } from "../api/goalsApi";
 import { Alert } from "react-native";
-
-// Utility to get today's date in YYYY-MM-DD format
-const getTodayDateString = () => {
-  const today = new Date();
-  return today.toISOString().split("T")[0];
-};
+import { getTodayInTimezone } from "../utils/dateUtils";
 
 /**
  * @interface GoalsContextType
@@ -113,7 +108,7 @@ export const GoalsProvider: React.FC<GoalsProviderProps> = ({ children }) => {
         console.error("Error fetching daily progress:", error);
         return null;
       }
-      if (date === getTodayDateString()) {
+      if (date === getTodayInTimezone()) {
         setTodayProgress(data);
       }
       return data || null;
@@ -125,7 +120,7 @@ export const GoalsProvider: React.FC<GoalsProviderProps> = ({ children }) => {
   useEffect(() => {
     if (user && session) {
       fetchUserGoal();
-      const todayStr = getTodayDateString();
+      const todayStr = getTodayInTimezone();
       fetchDailyProgress(todayStr);
     }
     if (!session) {
@@ -216,7 +211,7 @@ export const GoalsProvider: React.FC<GoalsProviderProps> = ({ children }) => {
       return null;
     }
 
-    if (date === getTodayDateString()) {
+    if (date === getTodayInTimezone()) {
       setTodayProgress(data || null);
     }
 

@@ -54,9 +54,9 @@ With the updated tech stack, the app is developed using **React Native with Type
     - **Streak Bonus:** Additional coins (e.g., +5 coins per day after a 3-day streak).
   - **Rewards Store:**
     - Users can spend coins to purchase various rewards. Purchased rewards are added to their inventory for later use.
-    - **Skip Day:** 50 coins – Skip the current day's goal. The goal is marked as 'skipped', the user's streak is maintained (it neither increments nor resets). This item is actively used by the user from their inventory.
-    - **Streak Saver:** 75 coins – Passively protects a user's streak. If a user fails to meet their daily goal and would normally lose their streak, this item is automatically consumed in the background. The streak is maintained for that instance (it neither increments nor resets), and the 'Streak Saver' item is removed from inventory. Only one 'Streak Saver' can be used per potential streak break.
-    - **Goal Reduction:** 30 coins – Temporarily lowers the daily goal target for the current day by 25% when actively used by the user from their inventory. Goal reductions can be stacked
+    - **Skip Day:** 200 coins – Skip the current day's goal. The goal is marked as 'skipped', the user's streak is maintained (it neither increments nor resets). This item is actively used by the user from their inventory.
+    - **Streak Saver:** 450 coins – Passively protects a user's streak. If a user fails to meet their daily goal and would normally lose their streak, this item is automatically consumed in the background. The streak is maintained for that instance (it neither increments nor resets), and the 'Streak Saver' item is removed from inventory. Only one 'Streak Saver' can be used per potential streak break.
+    - **Goal Reduction:** 100 coins – Temporarily lowers the daily goal target for the current day by 25% when actively used by the user from their inventory. Goal reductions can be stacked
   - **User Inventory:** Users can view their purchased and currently held rewards (e.g., "Skip Day" items) in a dedicated inventory section. Items like "Skip Day" and "Goal Reduction" can be activated or used at a later time. "Streak Saver" items are passive and consumed automatically.
   - **Bonus Challenges:**
     - Randomly triggered challenges (e.g., "Run 7 km instead of 5 km") awarding extra coins (e.g., +20 coins).
@@ -199,9 +199,9 @@ With the updated tech stack, the app is developed using **React Native with Type
    - Update the user's coin balance upon successful goal completion.
 2. **Develop the Rewards Store:**
    - Use React Native Paper to create a rewards UI displaying:
-     - **Skip Day (50 coins)**
-     - **Streak Saver (75 coins)**
-     - **Goal Reduction (30 coins)**
+     - **Skip Day (200 coins)**
+     - **Streak Saver (450 coins)**
+     - **Goal Reduction (100 coins)**
    - Process reward purchases and update streak data in Supabase.
 3. **Create Bonus Challenge Logic:**
    - Randomly trigger bonus challenges and process extra coin awards.
