@@ -1,62 +1,74 @@
-# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
-
-# dependencies
-node_modules/
+# Environment variables and secrets
+.env
+.env.*
+*.env
+credentials.json
+*credentials*.json
+*.p8
+*.pem
+*.key
+*.cer
+*.csr
+*.mobileprovision
 
 # Expo
 .expo/
 dist/
 web-build/
-expo-env.d.ts
-
-# Native
-*.orig.*
 *.jks
 *.p8
 *.p12
 *.key
 *.mobileprovision
+*.orig.*
 
-# Metro
-.metro-health-check*
-
-# debug
+# Node
+node_modules/
 npm-debug.*
 yarn-debug.*
 yarn-error.*
+package-lock.json
 
 # macOS
 .DS_Store
-*.pem
+*.plist
 
-# local env files
-.env*.local
-
-# typescript
-*.tsbuildinfo
-
-app-example
-
-# Logs
-logs
+# Temporary files
 *.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-dev-debug.log
-# Dependency directories
-# Environment variables
-.env
-# Editor directories and files
-.idea
-.vscode
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
-# OS specific
+*.tmp
+*.temp
 
-# Task files
-# tasks.json
-# tasks/ 
+# Android/IntelliJ
+build/
+.idea
+.gradle
+local.properties
+*.iml
+*.hprof
+.cxx/
+
+# iOS
+ios/Pods/
+*.pbxuser
+!default.pbxuser
+*.mode1v3
+!default.mode1v3
+*.mode2v3
+!default.mode2v3
+*.perspectivev3
+!default.perspectivev3
+xcuserdata
+*.xccheckout
+*.moved-aside
+DerivedData
+*.hmap
+*.ipa
+*.xcuserstate
+ios/.xcode.env.local
+
+# Supabase
+/supabase/.branches/
+/supabase/.temp/
+
+# TypeScript
+*.tsbuildinfo 
