@@ -108,6 +108,17 @@ export default function RewardsStoreScreen() {
 
   const rewards: RewardItem[] = [
     {
+      id: "goal_reduction",
+      title: "Goal Reduction",
+      description: "Temporarily lower your daily goal target.",
+      cost: REWARD_COST_GOAL_REDUCTION,
+      icon: "target",
+      gradientColors: [theme.colors.purple500, theme.colors.purple600] as [
+        string,
+        string
+      ],
+    },
+    {
       id: "skip_day",
       title: "Skip Day",
       description: "Skip a day's goal without breaking your streak.",
@@ -121,21 +132,11 @@ export default function RewardsStoreScreen() {
     {
       id: "streak_saver",
       title: "Streak Saver",
-      description: "Maintain your streak despite a missed goal.",
+      description:
+        "Maintain your streak despite a missed goal. (Automatically used)",
       cost: REWARD_COST_STREAK_SAVER,
       icon: "shield",
       gradientColors: [theme.colors.success500, theme.colors.success600] as [
-        string,
-        string
-      ],
-    },
-    {
-      id: "goal_reduction",
-      title: "Goal Reduction",
-      description: "Temporarily lower your daily goal target.",
-      cost: REWARD_COST_GOAL_REDUCTION,
-      icon: "target",
-      gradientColors: [theme.colors.purple500, theme.colors.purple600] as [
         string,
         string
       ],

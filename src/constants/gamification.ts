@@ -15,9 +15,9 @@ export const COINS_FOR_DAILY_GOAL_COMPLETION = 10;
 // export const STREAK_BONUS_THRESHOLD_DAYS = 3;
 
 // Costs for items in the Rewards Store
-export const REWARD_COST_SKIP_DAY = 50;
-export const REWARD_COST_STREAK_SAVER = 75;
-export const REWARD_COST_GOAL_REDUCTION = 30;
+export const REWARD_COST_SKIP_DAY = 200;
+export const REWARD_COST_STREAK_SAVER = 450;
+export const REWARD_COST_GOAL_REDUCTION = 100;
 
 // Streak Bonus Constants
 export const STREAK_BONUS_COINS_PER_DAY = 5;

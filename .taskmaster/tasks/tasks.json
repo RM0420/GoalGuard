@@ -1,0 +1,316 @@
+{
+  "master": {
+    "tasks": [
+      {
+        "id": 1,
+        "title": "Project Setup & Core Dependencies",
+        "description": "Set up the core React Native project using Expo, TypeScript, and Expo Router. Integrate React Native Paper for UI components and initialize the Supabase client.",
+        "details": "Initialize a new Expo project with TypeScript template. Install `react-native-paper`, `@supabase/supabase-js`, and other necessary dependencies. Configure `app.config.ts` or `app.json`. Set up the basic Expo Router structure (`app/`). Create `src/lib/supabaseClient.ts` to initialize the Supabase client using environment variables for `SUPABASE_URL` and `SUPABASE_ANON_KEY`. Configure React Native Paper theme in `src/constants/theme.ts` and wrap the app root with `PaperProvider`.",
+        "testStrategy": "Verify project builds and runs on iOS simulator/device. Check if React Native Paper components render correctly. Ensure Supabase client initializes without errors.",
+        "priority": "high",
+        "dependencies": [],
+        "status": "done",
+        "subtasks": []
+      },
+      {
+        "id": 2,
+        "title": "Implement Supabase Database Schema & RLS",
+        "description": "Implement the Supabase database schema as detailed in the PRD, including tables for users, profile/stats, goals, daily progress, coin transactions, user owned rewards, and streak savers applied. Enable Row Level Security (RLS).",
+        "details": "Using Supabase CLI or the Supabase Studio UI, create the following tables with specified columns, types, and constraints:\n- `users` (`id` UUID FK, `created_at`)\n- `user_profile_and_stats` (`user_id` UUID PK/FK, `coin_balance` INTEGER, `current_streak_length` INTEGER, `updated_at`)\n- `goals` (`id` UUID PK, `user_id` UUID FK, `goal_type` TEXT, `target_value` INTEGER, `target_unit` TEXT, `apps_to_block` JSONB, `is_active` BOOLEAN, `created_at`, `updated_at`). Add a unique index constraint for `is_active = true` per user.\n- `daily_progress` (`id` UUID PK, `user_id` UUID FK, `goal_id` UUID FK, `date` DATE, `progress_data` JSONB, `status` TEXT ENUM, `effective_target_value` INTEGER, `effective_target_unit` TEXT, `last_fetched_from_healthkit` TIMESTAMPTZ, `created_at`). Add a unique constraint on `(user_id, date)`.\n- `coin_transactions` (`id` UUID PK, `user_id` UUID FK, `type` TEXT ENUM, `description` TEXT, `coin_change` INTEGER, `related_goal_id` UUID FK, `reward_details` JSONB, `created_at`)\n- `user_owned_rewards` (`id` UUID PK, `user_id` UUID FK, `reward_type` TEXT ENUM, `quantity` INTEGER, `acquired_at`, `updated_at`). Add a unique constraint on `(user_id, reward_type)`.\n- `streak_savers_applied` (`id` UUID PK, `user_id` UUID FK, `date_saved` DATE, `created_at`). Add a unique constraint on `(user_id, date_saved)`.\nEnable RLS for all tables, ensuring users can only read/write their own data where appropriate. Define ENUM types for `daily_progress.status`, `coin_transactions.type`, and `user_owned_rewards.reward_type`.",
+        "testStrategy": "Verify all tables are created correctly in Supabase Studio. Test RLS policies using authenticated and unauthenticated Supabase client instances to ensure data access is restricted per user.",
+        "priority": "high",
+        "dependencies": [
+          1
+        ],
+        "status": "done",
+        "subtasks": []
+      },
+      {
+        "id": 3,
+        "title": "Implement User Authentication (Supabase Auth & UI)",
+        "description": "Implement user authentication flows (sign-up, login, logout) using Supabase Auth. Create the necessary UI screens using Expo Router and React Native Paper. Link Supabase Auth users to the `users` and `user_profile_and_stats` tables.",
+        "details": "Develop `app/(auth)/sign-in.tsx` and `app/(auth)/sign-up.tsx` screens using React Native Paper components for input fields and buttons. Use `supabase.auth.signUp` and `supabase.auth.signInWithPassword` for authentication. Implement navigation between auth screens and the main app (`app/(tabs)/`) using Expo Router based on the authentication state. In `app/_layout.tsx`, set up an Auth context or listener to manage session state and redirect unauthenticated users to the auth flow. Upon successful sign-up, create corresponding entries in the `users` and `user_profile_and_stats` tables using the Supabase Auth user ID.",
+        "testStrategy": "Test user sign-up with valid/invalid credentials. Test user login with registered/unregistered accounts. Verify session persistence on app restart. Confirm new entries are created in `users` and `user_profile_and_stats` tables upon sign-up.",
+        "priority": "high",
+        "dependencies": [
+          1,
+          2
+        ],
+        "status": "done",
+        "subtasks": []
+      },
+      {
+        "id": 4,
+        "title": "Implement Goal Setting UI & Supabase Integration",
+        "description": "Develop the UI for users to set their daily physical goal (type, target, unit) and select apps to block. Store the active goal and selected apps in the `goals` table in Supabase.",
+        "details": "Create a screen or modal (`app/(tabs)/goals.tsx` or `app/modal/goal-setting.tsx`) using React Native Paper components. Provide options to select goal type (steps, run distance), input target value, and select unit. Implement a mechanism to list installed apps (requires native module or Expo capability if available) and allow users to select which ones to block, storing their bundle identifiers in the `apps_to_block` JSONB column of the `goals` table. Implement logic to save the goal to the `goals` table, marking it as `is_active = true` and setting any previous active goal for the user to `is_active = false`. Use Supabase client to interact with the `goals` table.",
+        "testStrategy": "Test setting a new goal and updating an existing one. Verify the goal details (type, target, unit, apps to block) are correctly saved in the `goals` table. Ensure only one goal is marked `is_active = true` for a user at any time.",
+        "priority": "high",
+        "dependencies": [
+          1,
+          2,
+          3
+        ],
+        "status": "done",
+        "subtasks": []
+      },
+      {
+        "id": 5,
+        "title": "Integrate HealthKit & Display Progress",
+        "description": "Integrate with HealthKit to fetch daily physical activity data (steps, running distance). Request necessary permissions from the user. Display the fetched progress data on the Dashboard screen.",
+        "details": "Use Expo modules (e.g., `expo-health-kit` if available and sufficient, otherwise a custom native module in `native-modules/HealthKitModule/`) to request HealthKit permissions for reading step count and distance data. Implement functions in `src/services/HealthKitService.ts` to query HealthKit for daily progress data for the current day. Display this data on the `app/(tabs)/dashboard.tsx` screen, showing current progress against the user's active goal fetched from Supabase (Task 4). Periodically fetch and update progress data while the dashboard is active.",
+        "testStrategy": "Test HealthKit permission request flow. Verify that step count and distance data are fetched correctly from HealthKit and displayed accurately on the dashboard. Ensure data updates periodically.",
+        "priority": "high",
+        "dependencies": [
+          1,
+          2,
+          3,
+          4
+        ],
+        "status": "done",
+        "subtasks": []
+      },
+      {
+        "id": 6,
+        "title": "Implement Screen Time API Integration & Permission Flow",
+        "description": "Implement the integration with the iOS Screen Time API to block selected applications. Guide the user through granting the necessary permissions.",
+        "details": "Develop a custom native module (`native-modules/ScreenTimeModule/`) or use an appropriate Expo module if available, to interact with the Screen Time API (`DeviceActivity` framework). Implement functions to request Screen Time permissions (`requestAuthorization`). Create a guided UI flow (`app/modal/screen-time-setup.tsx`) explaining why permissions are needed and directing the user to grant them in iOS Settings. Develop a function in `src/services/ScreenTimeService.ts` that can receive a list of app bundle identifiers and a duration/schedule to block them. This function will be called by the backend Edge Function (Task 7).",
+        "testStrategy": "Test the Screen Time permission request flow. Verify that the app can successfully request and detect if permissions are granted. Manually test triggering a basic block (e.g., block a single test app for 1 minute) via the native module/service function.",
+        "priority": "high",
+        "dependencies": [
+          1,
+          3,
+          4
+        ],
+        "status": "done",
+        "subtasks": []
+      },
+      {
+        "id": 7,
+        "title": "Develop Supabase Edge Function: Daily Goal Check & Blocking Trigger",
+        "description": "Develop the core Supabase Edge Function `daily-goal-check` that runs at midnight. This function checks the previous day's goal completion status using data in `daily_progress`, updates the user's streak and coin balance, handles 'Streak Saver' rewards, and triggers the Screen Time API blocking if the goal was ultimately unmet.",
+        "details": "Create a Supabase Edge Function named `daily-goal-check` in `supabase/functions/daily-goal-check/index.ts`. Configure it to run via a scheduled job at 12:00 AM daily. Inside the function:\n1. Query `daily_progress` for all users for the previous day.\n2. For each user, determine if the goal was completed (based on `progress_data` vs `effective_target_value` or `target_value` from the linked `goals` table).\n3. If failed, check `user_owned_rewards` for a 'streak_saver'. If found, decrement quantity in `user_owned_rewards`, add entry to `streak_savers_applied`, maintain streak, and log transaction in `coin_transactions`. Mark `daily_progress.status` as 'failed_streak_saved'.\n4. If failed and no 'streak_saver', reset `current_streak_length` in `user_profile_and_stats` and mark `daily_progress.status` as 'failed'. Trigger the Screen Time API blocking via a mechanism that communicates with the user's device (e.g., Supabase Realtime, Push Notifications triggering a native module call on the device).\n5. If completed or skipped ('Skip Day' handled by Task 10), increment `current_streak_length` in `user_profile_and_stats`. Award base coins and streak bonus coins (if applicable) by updating `coin_balance` in `user_profile_and_stats` and logging transactions in `coin_transactions`. Mark `daily_progress.status` as 'completed' or 'skipped'.\nEnsure the function uses service role key or appropriate RLS bypass for database operations.",
+        "testStrategy": "Write unit tests for the Edge Function logic covering goal completion, failure, streak saver usage, streak reset, coin awards, and transaction logging. Test scheduling and execution via Supabase CLI or Studio. Verify database updates (`user_profile_and_stats`, `coin_transactions`, `user_owned_rewards`, `streak_savers_applied`, `daily_progress.status`) are correct after function execution under various scenarios (goal met, failed, failed with saver, skipped).",
+        "priority": "high",
+        "dependencies": [
+          2,
+          5,
+          6
+        ],
+        "status": "done",
+        "subtasks": []
+      },
+      {
+        "id": 8,
+        "title": "Implement Gamification Core: Coin/Streak Display",
+        "description": "Implement the display of the user's current coin balance and streak length on the Dashboard screen. Ensure these values update based on actions processed by the `daily-goal-check` Edge Function.",
+        "details": "Fetch the user's `coin_balance` and `current_streak_length` from the `user_profile_and_stats` table in Supabase. Display these values prominently on the `app/(tabs)/dashboard.tsx` screen using React Native Paper components. Implement real-time updates using Supabase Realtime subscriptions on the `user_profile_and_stats` table for the current user, so the display updates automatically when the `daily-goal-check` Edge Function modifies the record.",
+        "testStrategy": "Verify coin balance and streak length are displayed correctly on the dashboard upon login. Simulate goal completion (manually update DB or trigger EF) and verify the dashboard display updates in real-time via Supabase Realtime.",
+        "priority": "medium",
+        "dependencies": [
+          2,
+          3,
+          5,
+          7
+        ],
+        "status": "done",
+        "subtasks": []
+      },
+      {
+        "id": 9,
+        "title": "Implement Rewards Store UI & Purchase Logic",
+        "description": "Develop the Rewards Store UI where users can view available rewards ('Skip Day', 'Streak Saver', 'Goal Reduction') and purchase them using their coin balance. Implement the logic to process purchases and update the user's coin balance and owned rewards inventory in Supabase.",
+        "details": "Create the `app/(tabs)/rewards-store.tsx` screen using React Native Paper. Display the list of available rewards with their costs (Skip Day: 200, Streak Saver: 450, Goal Reduction: 100). Fetch the user's current coin balance (Task 8 dependency) to determine if they can afford a reward. Implement a purchase button for each reward. When a reward is purchased:\n1. Check if the user has enough coins.\n2. If yes, decrement `coin_balance` in `user_profile_and_stats`.\n3. Add or increment the reward quantity in the `user_owned_rewards` table (handle existing rewards by incrementing quantity, new rewards by inserting a new row with quantity 1).\n4. Log the transaction in the `coin_transactions` table.\nUse Supabase transactions if possible to ensure atomicity of coin balance update and inventory update.",
+        "testStrategy": "Test purchasing rewards when the user has enough coins. Verify coin balance decreases correctly and the reward quantity in `user_owned_rewards` is updated (incremented or new row created). Test attempting to purchase a reward when the user does not have enough coins and verify the transaction is rejected. Check `coin_transactions` logs for purchase records.",
+        "priority": "medium",
+        "dependencies": [
+          1,
+          2,
+          3,
+          8
+        ],
+        "status": "done",
+        "subtasks": []
+      },
+      {
+        "id": 10,
+        "title": "Implement Inventory UI & Reward Usage Logic",
+        "description": "Develop the Inventory UI where users can view their owned rewards. Implement the logic for actively using rewards ('Skip Day', 'Goal Reduction') and the passive consumption logic for 'Streak Saver' (handled by Task 7). Update inventory and apply reward effects via a Supabase Edge Function.",
+        "details": "Create the `app/(tabs)/inventory.tsx` screen using React Native Paper to display the user's owned rewards from the `user_owned_rewards` table. For 'Skip Day' and 'Goal Reduction' rewards, add 'Use' buttons. Implement a Supabase Edge Function `use-reward` (in `supabase/functions/process-rewards/index.ts` or similar) that is called from the frontend when a user clicks 'Use'. This function will:\n1. Verify the user owns the reward and has quantity > 0.\n2. Decrement the quantity in `user_owned_rewards` (remove row if quantity becomes 0).\n3. Log the transaction in `coin_transactions`.\n4. Apply the reward effect:\n   - 'Skip Day': Mark the current day's entry in `daily_progress` with status 'skipped'.\n   - 'Goal Reduction': Update the `effective_target_value` and `effective_target_unit` for the current day's entry in `daily_progress` (calculate 25% reduction from the active goal's `target_value`). Goal reductions can stack, so apply the reduction to the *current* effective target.\n'Streak Saver' consumption is handled passively by the `daily-goal-check` Edge Function (Task 7) and logged in `streak_savers_applied`.",
+        "testStrategy": "Test viewing owned rewards in the inventory. Test using 'Skip Day' and verify quantity decreases and the current day's `daily_progress.status` becomes 'skipped'. Test using 'Goal Reduction' and verify quantity decreases and `daily_progress.effective_target_value` is updated correctly. Test stacking 'Goal Reduction'. Verify transactions are logged in `coin_transactions`. Manually test the 'Streak Saver' passive consumption logic by failing a goal with a saver in inventory and verifying quantity decreases and `streak_savers_applied` is updated (via Task 7 testing).",
+        "priority": "medium",
+        "dependencies": [
+          1,
+          2,
+          3,
+          4,
+          7,
+          9
+        ],
+        "status": "done",
+        "subtasks": []
+      }
+    ],
+    "metadata": {
+      "created": "2025-06-30T19:47:40.103Z",
+      "updated": "2025-06-30T19:55:40.929Z",
+      "description": "Tasks for master context"
+    }
+  },
+  "mvp-development": {
+    "tasks": [
+      {
+        "id": 1,
+        "title": "Setup Apple Developer Account and iOS Environment",
+        "description": "Set up the necessary Apple infrastructure and local development environment for native iOS development, including purchasing the developer account, configuring App Store Connect, managing certificates, and preparing Xcode and physical devices.",
+        "details": "1. Purchase an Apple Developer Program membership ($99/year).\n2. Log in to App Store Connect and configure initial settings, including team members and roles.\n3. Access the Apple Developer portal.\n4. Generate necessary certificates: Development, Distribution (App Store and Ad Hoc).\n5. Create App IDs for the project.\n6. Create Provisioning Profiles linking App IDs, Certificates, and Devices.\n7. Download and install the latest version of Xcode from the Mac App Store.\n8. Configure Xcode with the Apple ID associated with the developer account.\n9. Connect physical iOS devices (iPhone, iPad) to the development machine.\n10. Register connected devices in the Apple Developer portal.\n11. Ensure devices are provisioned for development testing.\n<info added on 2025-06-30T20:17:02.513Z>\nCRITICAL PREREQUISITE: User is on a Windows PC. Before proceeding with any Apple Developer Account setup steps, set up cloud macOS access. MacStadium is recommended for this purpose.\n</info added on 2025-06-30T20:17:02.513Z>\n<info added on 2025-06-30T20:28:53.512Z>\nNEW APPROACH: Prioritize using EAS Build (Expo Application Services) with the FREE tier (30 builds/month) as the initial strategy for iOS builds. This approach allows building iOS apps without requiring a local macOS environment. Steps include:\n1. Install and set up the EAS CLI.\n2. Configure the `eas.json` file for the project.\n3. Test building the iOS app using EAS Build.\nThis EAS Build approach should be attempted FIRST before considering alternative solutions like MacStadium for macOS access.\n</info added on 2025-06-30T20:28:53.512Z>\n<info added on 2025-06-30T20:39:34.214Z>\n<info added on 2025-06-30T20:30:00.000Z>\nUPDATE ON EAS BUILD APPROACH: EAS CLI has been successfully installed and configured for iOS builds. The next critical step is to purchase the Apple Developer Account ($99/year). EAS Build is ready to proceed with builds once the Apple Developer Account is active and linked.\n</info added on 2025-06-30T20:30:00.000Z>\n</info added on 2025-06-30T20:39:34.214Z>",
+        "testStrategy": "1. Verify successful login to both the Apple Developer portal and App Store Connect.\n2. Confirm that Development and Distribution certificates are generated and valid.\n3. Check that App IDs and Provisioning Profiles are created correctly.\n4. Open Xcode and confirm that the Apple Developer account is added and recognized.\n5. Connect a physical iOS device, select it as the build target in Xcode, and attempt to build and run a simple 'Hello World' or test project template on the device.\n6. Confirm that the test project successfully installs and launches on the physical device without signing errors.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": []
+      },
+      {
+        "id": 2,
+        "title": "Configure Xcode for Native iOS Module Development",
+        "description": "Configure the Xcode environment and project structure specifically to support building, testing, and integrating the native iOS module.",
+        "details": "1. Create a new Xcode project or workspace structure suitable for housing a native module. This might involve setting up a framework or library target.\n2. Configure build settings for the module target, ensuring correct architecture support, header search paths, and linking settings.\n3. Set up schemes for building and testing the native module independently.\n4. Consider how the module will be consumed (e.g., as a static library, dynamic framework, or via package managers) and configure the build output accordingly.\n5. Ensure the development environment within Xcode is ready to compile Objective-C/Swift code for the module.\n6. (Optional but recommended) Create a simple dummy host application target within the same workspace to facilitate testing the module in a realistic context.",
+        "testStrategy": "1. Create a minimal native code file (e.g., a simple class or function) within the module target.\n2. Attempt to build the native module target using the configured scheme. Verify that the build succeeds without errors.\n3. If a dummy host app was created, attempt to link the module to the host app and build the host app. Verify successful linking and build.\n4. (If possible without writing actual module logic) Verify that basic native code compilation is working correctly within the environment.",
+        "status": "pending",
+        "dependencies": [
+          1
+        ],
+        "priority": "high",
+        "subtasks": []
+      },
+      {
+        "id": 3,
+        "title": "Implement HealthKit Native Module and RN Bridge",
+        "description": "Develop the native iOS module to integrate with HealthKit for fetching step count, distance, and running workout data, and create the React Native bridge to expose this functionality.",
+        "details": "1.  **HealthKit Setup:** Add the HealthKit capability to the Xcode project target. Update `Info.plist` with necessary privacy descriptions (`NSHealthShareUsageDescription`, `NSHealthUpdateUsageDescription`).\n2.  **Native Module Implementation:**\n    *   Create a new Swift or Objective-C class that conforms to `RCTBridgeModule`.\n    *   Implement methods for requesting HealthKit authorization (`requestAuthorization`). Specify the data types to read (steps, distance, running workouts).\n    *   Implement methods for querying data (`fetchSteps`, `fetchDistance`, `fetchRunningWorkouts`).\n    *   Use `HKHealthStore` to perform queries (`HKQuantityQuery` for steps/distance, `HKSampleQuery` for workouts).\n    *   Handle date range parameters passed from React Native.\n    *   Aggregate step/distance data by day if needed.\n    *   Structure the results (e.g., array of objects for workouts, daily totals for steps/distance) to be easily consumed by React Native.\n    *   Use `RCTPromiseResolveBlock` and `RCTPromiseRejectBlock` for asynchronous operations and error handling.\n3.  **React Native Bridge:**\n    *   Export the native module using `RCT_EXPORT_MODULE()`.\n    *   Export native methods using `RCT_EXPORT_METHOD()`.\n    *   Ensure data types passed between JS and native are correctly handled by the bridge.\n4.  **Error Handling:** Implement robust error handling for permission issues, data unavailability, and HealthKit errors.",
+        "testStrategy": "1.  **Authorization Test:**\n    *   Call the `requestAuthorization` method from React Native.\n    *   Verify that the HealthKit permission prompt appears on the iOS device.\n    *   Test both granting and denying permissions and verify the correct response/error is received in React Native.\n2.  **Data Fetching Tests:**\n    *   Ensure Health data (steps, distance, running workouts) exists on the test device (manually add if necessary).\n    *   Call the data fetching methods (`fetchSteps`, `fetchDistance`, `fetchRunningWorkouts`) from React Native with specific date ranges.\n    *   Verify that the data returned in React Native matches the data shown in the native Health app for the same date range.\n    *   Test edge cases: date ranges with no data, future date ranges, very large date ranges.\n    *   Verify the structure and data types of the returned data in React Native.\n3.  **Error Handling Tests:**\n    *   Test fetching data when permissions are denied.\n    *   Test fetching data for types not requested in authorization.\n    *   Simulate potential HealthKit errors if possible.\n4.  **Integration Test:** Integrate the module into a simple React Native component to display the fetched data.",
+        "status": "pending",
+        "dependencies": [
+          1,
+          2
+        ],
+        "priority": "high",
+        "subtasks": []
+      },
+      {
+        "id": 4,
+        "title": "Implement HealthKit Data Fetching Queries",
+        "description": "Implement the native iOS code within the HealthKit module to query and retrieve step count, distance, and running workout data using the HealthKit API.",
+        "details": "1.  **Query Steps:** Use `HKStatisticsCollectionQuery` or `HKSampleQuery` to fetch step count data over specified time ranges (e.g., daily, weekly). Handle date intervals and aggregation.\n2.  **Query Distance:** Use `HKStatisticsCollectionQuery` or `HKSampleQuery` to fetch distance data (e.g., walking+running distance). Handle units (e.g., meters, miles).\n3.  **Query Running Workouts:** Use `HKSampleQuery` to fetch `HKWorkout` samples filtered by `workoutActivityType` = `.running`. Extract relevant data like duration, distance, and potentially routes if available.\n4.  **Data Formatting:** Format the fetched data into a structure that can be easily passed back to React Native via the bridge (e.g., arrays of dictionaries).\n5.  **Error Handling:** Implement robust error handling for HealthKit queries (e.g., permission errors, data not available).\n6.  **Bridge Integration:** Ensure the native methods for fetching data correctly use the bridge to return results or errors to the React Native layer.",
+        "testStrategy": "1.  **Prerequisites:** Ensure HealthKit authorization is granted on the test device (this should be covered by Task 3 testing, but verify). Populate HealthKit with sample data (steps, distance, running workouts) using the Health app or other fitness apps.\n2.  **Step Query Test:** Call the native method to fetch steps for a specific date range from React Native. Verify that the returned data matches the expected step count in HealthKit for that period. Test different date ranges (e.g., today, last 7 days).\n3.  **Distance Query Test:** Call the native method to fetch distance for a specific date range. Verify the returned data matches HealthKit, paying attention to units.\n4.  **Running Workout Query Test:** Call the native method to fetch running workouts for a date range. Verify that the returned array contains the expected workouts and that extracted details (duration, distance) are correct.\n5.  **Error Handling Test:** Test scenarios where data is not available or permissions are revoked, verifying that appropriate errors are returned to React Native.",
+        "status": "pending",
+        "dependencies": [
+          1,
+          2,
+          3
+        ],
+        "priority": "high",
+        "subtasks": []
+      },
+      {
+        "id": 5,
+        "title": "Implement Screen Time API Integration",
+        "description": "Integrate the iOS Screen Time API to enable app discovery (usage monitoring) and blocking features within the application.",
+        "details": "1.  **Screen Time API Setup:** Add the Screen Time capability to the Xcode project target. Update `Info.plist` with necessary privacy descriptions related to Screen Time/Managed Settings.\n2.  **Authorization:** Implement the process to request authorization for Screen Time access using `DeviceActivityAuthorizationCenter`. Handle different authorization states and permissions required for monitoring and managing restrictions.\n3.  **App Usage Monitoring:** Utilize `DeviceActivityMonitor` and `DeviceActivityEvent` to set up monitoring for app usage. Explore methods to query or receive notifications about app activity relevant to discovery features.\n4.  **App Blocking Implementation:** Implement the logic to block specific applications using `ManagedSettingsStore`. This involves configuring restrictions based on app bundle identifiers provided by the app.\n5.  **React Native Bridge:** Create a native module and bridge to expose the Screen Time authorization, usage monitoring data, and app blocking functionalities to the React Native layer.",
+        "testStrategy": "1.  **Authorization Test:** Call the Screen Time authorization request method from React Native. Verify that the system permission prompt appears on the iOS device. Test granting and denying permissions and confirm the correct response/error is received in React Native.\n2.  **Usage Monitoring Test:** Implement a basic usage monitoring session. Use several different apps on the device for a short period. Verify that the implemented native code can detect or query this usage data.\n3.  **App Blocking Test:** Select a non-system app (e.g., a third-party app). Use the app's interface (via the RN bridge) to add this app's bundle identifier to the blocked list. Attempt to open the blocked app on the device and verify that it is successfully blocked by the Screen Time system. Remove the app from the blocked list and verify it can be opened again.\n4.  **Error Handling:** Test scenarios like attempting to block a non-existent app or a system app to ensure graceful failure or appropriate handling.",
+        "status": "pending",
+        "dependencies": [
+          1,
+          2
+        ],
+        "priority": "high",
+        "subtasks": []
+      },
+      {
+        "id": 6,
+        "title": "End-to-end Integration Testing: HealthKit, Screen Time, and Gamification",
+        "description": "Perform comprehensive end-to-end testing to verify the integration of HealthKit and Screen Time data streams with the application's gamification logic and user interface.",
+        "details": "This task involves setting up test scenarios that simulate real-world user activity (steps, distance, running workouts, app usage) and verifying that this activity correctly triggers gamification events (e.g., points accumulation, badge unlocking, progress updates) within the application. It requires coordinating data input from HealthKit and Screen Time with the application's backend or frontend gamification logic. Test cases should cover various scenarios:\n1.  **HealthKit Data Flow:**\n    *   Simulate step count increases and verify corresponding point/progress updates.\n    *   Simulate distance accumulation and verify related gamification triggers.\n    *   Simulate completing running workouts and verify workout-specific rewards or progress.\n    *   Test edge cases like zero activity, large amounts of activity, and activity spanning across day boundaries.\n2.  **Screen Time Data Flow:**\n    *   Simulate using monitored apps for specific durations and verify if usage contributes to screen time-based goals or challenges.\n    *   Test scenarios involving app blocking features if implemented and how they interact with usage tracking.\n    *   Verify that screen time data is correctly reported and reflected in the UI.\n3.  **Combined Scenarios:**\n    *   Test scenarios where both physical activity and screen time usage occur concurrently and verify that both contribute correctly to the overall gamification state.\n    *   Verify that permissions changes (revoking HealthKit or Screen Time access) are handled gracefully by the gamification system.\n4.  **UI/UX Verification:**\n    *   Ensure that gamification progress, points, badges, etc., are correctly displayed in the user interface based on the integrated data.\n    *   Verify that real-time or near real-time updates occur as expected.\n<info added on 2025-06-30T20:31:49.546Z>\nTesting Strategy:\n- Utilize EAS Build for running automated XCTest unit tests focusing on HealthKit permissions handling, data synchronization logic, and gamification goal completion validation.\n- Set up a TestFlight build for manual beta testing with a small group of family and friends.\n- Prepare a detailed test checklist for beta testers, specifically instructing them to verify HealthKit step tracking accuracy and the functionality of Screen Time app blocking features as they relate to gamification.\n</info added on 2025-06-30T20:31:49.546Z>",
+        "testStrategy": "1.  **Environment Setup:** Use a physical iOS device with HealthKit and Screen Time enabled. Ensure the app is built with the integrated native modules (Tasks 3, 4, 5). Have access to tools or methods to simulate HealthKit data (e.g., manually adding data in the Health app, using developer tools) and control app usage for Screen Time testing.\n2.  **Data Input:** Manually add sample data in the Health app (steps, distance, workouts). Use target apps on the device to generate Screen Time usage data.\n3.  **Execution:**\n    *   Launch the application and ensure permissions for HealthKit and Screen Time are granted.\n    *   Perform actions that generate data (walking, running, using monitored apps).\n    *   Observe the application's UI and backend logs (if accessible) to verify that the data is received and processed correctly by the gamification system.\n    *   Check for expected changes in points, progress bars, unlocked badges, etc.\n    *   Test scenarios with varying amounts and types of activity/usage.\n    *   Test scenarios involving permission changes (revoke and re-grant).\n4.  **Verification:** Compare observed application behavior and UI updates against expected outcomes based on the gamification rules and the input data. Use debugging tools to trace data flow if necessary. Document test results, including any discrepancies or bugs found.",
+        "status": "pending",
+        "dependencies": [
+          3,
+          4,
+          5
+        ],
+        "priority": "high",
+        "subtasks": []
+      },
+      {
+        "id": 7,
+        "title": "Setup TestFlight and Conduct Beta Testing",
+        "description": "Configure TestFlight for beta distribution and initiate testing with a small group of family and friends.",
+        "details": "1. Prepare the application for TestFlight distribution: Ensure correct bundle identifier, versioning, and build settings for release.\n2. Archive the application in Xcode to create a distributable build.\n3. Upload the build to App Store Connect using Xcode or Transporter.\n4. In App Store Connect, navigate to the TestFlight section for the app.\n5. Add internal and external testers. For initial testing, focus on internal testers (team members) and a small group of external testers (family/friends).\n6. Create tester groups (e.g., 'Internal Testers', 'Family & Friends').\n7. Add builds to the appropriate groups. Internal builds are immediately available; external builds require App Review approval.\n8. Invite testers via email.\n9. Provide clear instructions to testers on how to install the TestFlight app and access the beta build.\n10. Set up a feedback mechanism (e.g., TestFlight feedback, shared document, chat group) to collect bug reports and suggestions.\n11. Monitor crashes and analytics in App Store Connect.",
+        "testStrategy": "1. Verify the archived build is successfully uploaded to App Store Connect.\n2. Confirm the build appears in the TestFlight section and is available for internal testing.\n3. Send invitations to a few internal testers and verify they receive the email.\n4. Have internal testers accept the invitation, install TestFlight, and download the app.\n5. Verify the app launches and is usable on the testers' devices.\n6. Submit the build for external review (if using external testers) and verify it passes review.\n7. Invite external testers and confirm they can download and install the app.\n8. Test the feedback mechanism by having testers submit dummy feedback.",
+        "status": "pending",
+        "dependencies": [
+          1,
+          2,
+          6
+        ],
+        "priority": "medium",
+        "subtasks": []
+      },
+      {
+        "id": 8,
+        "title": "Prepare App Store Submission Materials and Metadata",
+        "description": "Prepare all necessary assets, text, and configurations within App Store Connect for submitting the application to the Apple App Store.",
+        "details": "1. Gather all required marketing assets: app icon (1024x1024), screenshots for various device sizes (iPhone, iPad), and optional app preview videos.\n2. Write compelling marketing text: App Name, Subtitle, Promotional Text, Description, and Keywords.\n3. Prepare support URLs (Marketing URL, Support URL, Privacy Policy URL).\n4. Log in to App Store Connect and navigate to the app's page.\n5. Fill in all required metadata fields: Primary Language, Category, Age Rating, Pricing and Availability.\n6. Upload all prepared assets (icon, screenshots, videos).\n7. Configure the build for submission: Select the build uploaded via Xcode or Transporter (likely from Task 7).\n8. Complete the Export Compliance, Content Rights, and Advertising Identifier sections.\n9. Review all information entered for accuracy and completeness.",
+        "testStrategy": "1. Verify that all required fields in App Store Connect are filled out for the app version intended for submission.\n2. Check that all uploaded assets meet Apple's specifications and display correctly in the App Store Connect preview.\n3. Confirm that the selected build is marked as ready for submission.\n4. Review all text fields (description, keywords, etc.) for clarity, accuracy, and absence of typos.\n5. Ensure all required URLs (support, privacy policy) are correctly entered and accessible.\n6. Verify that the Export Compliance, Content Rights, and Advertising Identifier sections are completed accurately based on the app's functionality.",
+        "status": "pending",
+        "dependencies": [
+          1,
+          7
+        ],
+        "priority": "medium",
+        "subtasks": []
+      },
+      {
+        "id": 9,
+        "title": "Submit App to App Store",
+        "description": "Submit the final application build and prepared metadata to Apple for review and manage the launch process.",
+        "details": "1. Log in to App Store Connect.\n2. Navigate to the app version prepared for submission.\n3. Ensure the correct build (uploaded via TestFlight/Xcode) is selected and associated with this version.\n4. Verify all required metadata fields (from Task 8) are correctly populated and associated with the build.\n5. Select the appropriate pricing and availability settings.\n6. Choose the release strategy (manual or automatic).\n7. Click the \"Submit for Review\" button.\n8. Monitor the app's status in App Store Connect (Waiting For Review, In Review, Pending Developer Release/Ready for Sale, Rejected, etc.).\n9. Respond promptly to any communications from Apple reviewers regarding rejections or requests for clarification.\n10. If rejected, address the issues, create a new build if necessary, and resubmit.\n11. If approved, manage the release according to the chosen strategy (manually release or wait for automatic release).",
+        "testStrategy": "1. Confirm the submission process is successfully initiated in App Store Connect, and the app status updates to \"Waiting For Review\".\n2. Track the app's status through the review process.\n3. If rejected, verify that clear reasons are provided by Apple and that the status changes appropriately.\n4. Upon approval, verify the app status changes to \"Pending Developer Release\" (if manual) or \"Ready for Sale\" (if automatic).\n5. If manual release is chosen, verify the app becomes available on the App Store after manually releasing it.\n6. If automatic release is chosen, verify the app becomes available on the App Store shortly after approval.\n7. Search for the app on the App Store from a consumer device to confirm its availability and correct listing details.",
+        "status": "pending",
+        "dependencies": [
+          7,
+          8
+        ],
+        "priority": "medium",
+        "subtasks": []
+      },
+      {
+        "id": 10,
+        "title": "Develop MVP UI and Logic with Mock Data",
+        "description": "Develop the core application UI and logic using mock HealthKit and Screen Time data to enable frontend development and testing without requiring native module integration or an Apple Developer Account.",
+        "details": "1. Define mock data structures for HealthKit (steps, distance, workouts) and Screen Time (app usage, categories) that mimic the expected format from the native modules.\n2. Implement data providers or services within the React Native application that return this mock data.\n3. Build the main application screens (e.g., dashboard, progress views, settings) using React Native components.\n4. Implement the core gamification logic (e.g., calculating points, tracking progress, unlocking badges) using the mock data from the providers.\n5. Ensure the UI correctly displays the mock data and reflects changes based on the gamification logic.\n6. Use state management (e.g., Redux, Context API) to handle the flow of mock data and application state.\n7. Focus on creating a complete user experience flow based on the simulated data.",
+        "testStrategy": "1. Verify that the application launches and the UI renders correctly using the mock data.\n2. Manually manipulate the mock data within the application state or providers to simulate different user activities (e.g., high steps, long screen time) and verify the UI updates accordingly.\n3. Test the gamification logic by simulating scenarios that should trigger point accumulation, progress updates, or badge unlocks, and verify the expected outcomes are displayed in the UI.\n4. Ensure navigation between different screens works correctly.\n5. Verify that the application handles edge cases in the mock data (e.g., zero activity) gracefully.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": []
+      },
+      {
+        "id": 11,
+        "title": "Develop MVP with Mock Data",
+        "description": "Develop the core application UI and logic using mock HealthKit and Screen Time data to enable frontend development and testing without requiring native module integration or an Apple Developer Account.",
+        "details": "1. Define comprehensive mock data structures in a dedicated module or service. These structures should mimic the expected JSON or object format from the native HealthKit (steps, distance, running workouts including duration, calories) and Screen Time (total usage, per-app usage, category usage) bridges. Include variations for different scenarios (e.g., high activity day, low activity day, specific workout types, high screen time, low screen time, usage across different apps/categories).\n2. Implement mock data providers or services (e.g., `MockHealthKitService`, `MockScreenTimeService`) that return static mock data or data generated based on simple rules or parameters. These services should expose methods mirroring the expected native bridge APIs (e.g., `getSteps(dateRange)`, `getAppUsage(dateRange)`).\n3. Integrate these mock data providers into the application's data flow, ensuring that UI components and business logic consume data from these mock services when the native modules are not available or when a specific mock mode is enabled. Use conditional logic or dependency injection patterns.\n4. Build the main application screens (e.g., Dashboard, Activity Details, Progress/Stats views, Settings) using React Native components, connecting them to the mock data services.\n5. Implement the core gamification logic (e.g., calculating points based on activity/usage, tracking progress towards goals, unlocking badges) using the data provided by the mock services.\n6. Ensure the UI correctly displays the mock data and reflects the outcomes of the gamification logic.",
+        "testStrategy": "1. Verify that the application builds and launches successfully in a simulator or on a device without requiring native module setup or an Apple Developer Account.\n2. Confirm that the UI renders correctly on all target screens using the initial state of the mock data.\n3. Implement mechanisms (e.g., developer menu, console commands, or directly modifying mock data files/variables) to easily switch between different mock data scenarios (e.g., simulate a high-activity day, simulate a day with a long workout, simulate high screen time on specific apps).\n4. For each mock data scenario, manually navigate through the application screens and verify that:\n    - Activity data (steps, distance, workouts) is displayed correctly.\n    - Screen Time data (total usage, app breakdown) is displayed correctly.\n    - Gamification elements (points, progress bars, badge status) update accurately based on the mock data and the implemented logic.\n    - Edge cases in gamification logic (e.g., reaching a goal, earning a badge) are triggered correctly by specific mock data inputs.\n5. Ensure that UI interactions (e.g., navigating between dates, tapping on elements) behave as expected with the mock data.\n6. Verify that no errors or warnings related to missing native modules appear when running with mock data.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": []
+      }
+    ],
+    "metadata": {
+      "created": "2025-06-30T20:10:32.303Z",
+      "updated": "2025-06-30T21:35:35.872Z",
+      "description": "Tasks for implementing HealthKit, Screen Time APIs, and launching GoalGuard MVP"
+    }
+  }
+}
