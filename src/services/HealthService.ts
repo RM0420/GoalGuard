@@ -44,7 +44,7 @@ const mockHealthService: HealthServiceAPI = {
   },
 
   /**
-   * Simulates fetching today\'s step count.
+   * Simulates fetching today's step count.
    * @returns {Promise<number | null>} A simulated step count or null if "unavailable".
    */
   getTodaysSteps: async (): Promise<number | null> => {
@@ -54,7 +54,7 @@ const mockHealthService: HealthServiceAPI = {
   },
 
   /**
-   * Simulates fetching today\'s walking/running distance.
+   * Simulates fetching today's walking/running distance.
    * @returns {Promise<number | null>} A simulated distance in kilometers or null if "unavailable".
    */
   getTodaysDistance: async (): Promise<number | null> => {
@@ -66,11 +66,121 @@ const mockHealthService: HealthServiceAPI = {
   },
 };
 
-export const HealthService: HealthServiceAPI = mockHealthService;
+// Real HealthKit implementation
+let realHealthService: HealthServiceAPI | null = null;
 
-// Example of how you might switch later:
-// import Config from "react-native-config"; // Or some other env variable solution
-// const useMock = __DEV__; // Or: Config.USE_MOCK_HEALTH_SERVICE === "true"
-//
-// export const HealthService: HealthServiceAPI = useMock ? mockHealthService : realHealthService;
-// (where realHealthService would be imported from another file containing actual react-native-health logic)
+try {
+  // Only import react-native-health on iOS in a production build
+  if (Platform.OS === "ios") {
+    const AppleHealthKit = require("react-native-health").default;
+
+    const HEALTHKIT_PERMISSIONS = {
+      permissions: {
+        read: [
+          "Steps",
+          "DistanceWalkingRunning",
+          "FlightsClimbed",
+          "ActiveEnergyBurned",
+        ],
+        write: [], // We don't need write permissions for now
+      },
+    };
+
+    realHealthService = {
+      /**
+       * Initialize HealthKit and request permissions
+       * @returns {Promise<boolean>} True if permissions granted, false otherwise
+       */
+      initialize: async (): Promise<boolean> => {
+        return new Promise((resolve) => {
+          AppleHealthKit.initHealthKit(HEALTHKIT_PERMISSIONS, (error: any) => {
+            if (error) {
+              console.log("HealthKit initialization failed:", error);
+              resolve(false);
+            } else {
+              console.log("HealthKit initialized successfully");
+              resolve(true);
+            }
+          });
+        });
+      },
+
+      /**
+       * Fetch today's step count from HealthKit
+       * @returns {Promise<number | null>} Step count or null if unavailable
+       */
+      getTodaysSteps: async (): Promise<number | null> => {
+        return new Promise((resolve) => {
+          const today = new Date();
+          const startOfDay = new Date(
+            today.getFullYear(),
+            today.getMonth(),
+            today.getDate()
+          );
+
+          const options = {
+            startDate: startOfDay.toISOString(),
+            endDate: today.toISOString(),
+          };
+
+          AppleHealthKit.getStepCount(options, (err: any, results: any) => {
+            if (err) {
+              console.log("Error getting step count:", err);
+              resolve(null);
+            } else {
+              const steps = results?.value || 0;
+              console.log(`HealthKit: Retrieved ${steps} steps for today`);
+              resolve(steps);
+            }
+          });
+        });
+      },
+
+      /**
+       * Fetch today's walking/running distance from HealthKit
+       * @returns {Promise<number | null>} Distance in kilometers or null if unavailable
+       */
+      getTodaysDistance: async (): Promise<number | null> => {
+        return new Promise((resolve) => {
+          const today = new Date();
+          const startOfDay = new Date(
+            today.getFullYear(),
+            today.getMonth(),
+            today.getDate()
+          );
+
+          const options = {
+            startDate: startOfDay.toISOString(),
+            endDate: today.toISOString(),
+            unit: "meter", // Get in meters, we'll convert to km
+          };
+
+          AppleHealthKit.getDistanceWalkingRunning(
+            options,
+            (err: any, results: any) => {
+              if (err) {
+                console.log("Error getting distance:", err);
+                resolve(null);
+              } else {
+                const distanceInMeters = results?.value || 0;
+                const distanceInKm = distanceInMeters / 1000;
+                console.log(
+                  `HealthKit: Retrieved ${distanceInKm.toFixed(
+                    2
+                  )} km distance for today`
+                );
+                resolve(parseFloat(distanceInKm.toFixed(2)));
+              }
+            }
+          );
+        });
+      },
+    };
+  }
+} catch (error) {
+  console.log("react-native-health not available, using mock service:", error);
+}
+
+// Export the appropriate service based on availability
+export const HealthService: HealthServiceAPI =
+  realHealthService || mockHealthService;

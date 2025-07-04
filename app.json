@@ -1,19 +1,74 @@
 {
   "expo": {
     "scheme": "acme",
-    "plugins": ["expo-router"],
+    "plugins": [
+      "expo-router"
+    ],
     "name": "GoalGuard",
     "slug": "GoalGuard",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.goalguard.app",
+      "buildNumber": "1",
       "entitlements": {
-        "com.apple.developer.healthkit": true
+        "com.apple.developer.healthkit": true,
+        "com.apple.developer.healthkit.access": [
+          "health-records",
+          "health-records"
+        ],
+        "com.apple.developer.family-controls": true,
+        "com.apple.developer.deviceactivity": true,
+        "com.apple.developer.managedappsandmedia": true
       },
       "infoPlist": {
         "NSHealthShareUsageDescription": "GoalGuard needs access to your step count and distance data to track progress towards your daily goals.",
-        "NSHealthUpdateUsageDescription": "GoalGuard needs to update your health data to log workouts and goal achievements."
-      }
+        "NSHealthUpdateUsageDescription": "GoalGuard needs to update your health data to log workouts and goal achievements.",
+        "NSFamilyControlsUsageDescription": "GoalGuard uses Screen Time controls to help you stay focused by blocking distracting apps when you haven't reached your daily goals.",
+        "UIBackgroundModes": [
+          "background-processing",
+          "background-fetch",
+          "background-processing",
+          "background-fetch"
+        ],
+        "BGTaskSchedulerPermittedIdentifiers": [
+          "com.goalguard.app.refresh",
+          "com.goalguard.app.refresh"
+        ],
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "associatedDomains": [
+        "applinks:goalguard.app",
+        "applinks:goalguard.app"
+      ],
+      "capabilities": [
+        "HealthKit",
+        "FamilyControls",
+        "BackgroundModes",
+        "HealthKit",
+        "FamilyControls",
+        "BackgroundModes"
+      ]
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.goalguard.app"
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/icon.png"
     },
     "extra": {
       "router": {},

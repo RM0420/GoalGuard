@@ -1,50 +1,24 @@
-import React, { useState, useEffect, useCallback } from "react";
-import { View, StyleSheet, ScrollView, TouchableOpacity } from "react-native";
+import React, { useState, useCallback, useEffect } from "react";
 import {
-  Text,
-  ActivityIndicator,
-  useTheme,
-  IconButton,
-} from "react-native-paper";
+  ScrollView,
+  View,
+  StyleSheet,
+  RefreshControl,
+  Alert,
+} from "react-native";
+import { Text, Button, ActivityIndicator, useTheme } from "react-native-paper";
+import { useRouter } from "expo-router";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { useUserProfile } from "../../src/contexts/UserProfileContext";
 import { useGoals } from "../../src/contexts/GoalsContext";
-import { Database } from "../../src/types/database.types";
+import { StyledCard } from "../../src/components/common/StyledCard";
 import { StyledButton } from "../../src/components/common/StyledButton";
-import {
-  StyledCard,
-  CardHeader,
-  CardContent,
-  CardTitle,
-} from "../../src/components/common/StyledCard";
-import { Progress } from "../../src/components/common/Progress";
-import Badge from "../../src/components/common/Badge";
-import { AppTheme } from "../../src/constants/theme";
-import { useRouter } from "expo-router";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
+import StyledHeader from "../../src/components/common/StyledHeader";
+import { Badge } from "../../src/components/common/Badge";
 import { supabase } from "../../src/lib/supabaseClient";
-
-type Goal = Database["public"]["Tables"]["goals"]["Row"];
-type DailyProgress = Database["public"]["Tables"]["daily_progress"]["Row"];
-
-// Mock HealthKit data for development
-const useMockHealthKit = () => {
-  const [steps, setSteps] = useState<number | undefined>(7500);
-  const [distance, setDistance] = useState<number | undefined>(3.2);
-  const [isLoading, setIsLoading] = useState(false);
-
-  // For demo purposes, randomly increase values when refreshed
-  const refreshData = useCallback(() => {
-    setIsLoading(true);
-    setTimeout(() => {
-      setSteps(Math.floor(Math.random() * 5000) + 5000); // Random between 5000-10000
-      setDistance(parseFloat((Math.random() * 3 + 2).toFixed(2))); // Random between 2.00-5.00
-      setIsLoading(false);
-    }, 1000);
-  }, []);
-
-  return { steps, distance, isLoading, refreshData };
-};
+import { AppTheme } from "../../src/constants/theme";
+import useHealthKit from "../../src/hooks/useHealthKit";
+import useScreenTime from "../../src/hooks/useScreenTime";
 
 export default function DashboardScreen() {
   const { user, signOut } = useAuth();
@@ -60,22 +34,39 @@ export default function DashboardScreen() {
   const theme = useTheme<AppTheme>();
   const router = useRouter();
 
-  // Mock HealthKit data (replace with actual HealthKit integration)
+  // HealthKit Integration
   const {
     steps,
     distance,
     isLoading: isLoadingHealthData,
-    refreshData,
-  } = useMockHealthKit();
+    error: healthError,
+    hasPermissions: hasHealthKitPermissions,
+    requestPermissions: requestHealthKitPermissions,
+    fetchDailyHealthData,
+  } = useHealthKit();
+
+  // Screen Time Integration
+  const {
+    isLoading: isLoadingScreenTime,
+    error: screenTimeError,
+    hasAuthorization: hasScreenTimeAuthorization,
+    installedApps,
+    blockedApps,
+    requestAuthorization: requestScreenTimeAuthorization,
+    loadInstalledApps,
+    blockSocialMediaApps,
+    unblockAllApps,
+    categorizedApps,
+  } = useScreenTime();
 
   const [hasStreakSaver, setHasStreakSaver] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   // Fetch user's streak saver status
   const fetchStreakSaverStatus = useCallback(async () => {
     if (!user) return;
 
     try {
-      // Check if user has streak savers in inventory
       const { data: userRewards, error: rewardsError } = await supabase
         .from("user_owned_rewards")
         .select("quantity")
@@ -87,275 +78,426 @@ export default function DashboardScreen() {
         console.error("Error fetching streak saver status:", rewardsError);
       }
 
-      // User has streak savers in inventory
-      if (userRewards && userRewards.quantity > 0) {
-        setHasStreakSaver(true);
-        return;
-      }
-
-      // No streak savers in inventory, reset state
-      setHasStreakSaver(false);
+      setHasStreakSaver(!!(userRewards && userRewards.quantity > 0));
     } catch (error) {
       console.error("Error checking streak saver status:", error);
       setHasStreakSaver(false);
     }
   }, [user]);
 
-  // Calculate progress percentage
-  const calculateProgress = useCallback(() => {
-    if (!userGoal) return 0;
+  // Initialize permissions and data on component mount
+  useEffect(() => {
+    const initializeServices = async () => {
+      if (!hasHealthKitPermissions) {
+        const healthGranted = await requestHealthKitPermissions();
+        if (healthGranted) {
+          await fetchDailyHealthData();
+        }
+      } else {
+        await fetchDailyHealthData();
+      }
 
-    if (userGoal.goal_type === "steps" && steps !== undefined) {
-      return Math.min(steps / userGoal.target_value, 1);
-    } else if (
-      userGoal.goal_type === "run_distance" &&
-      distance !== undefined
-    ) {
-      return Math.min(distance / userGoal.target_value, 1);
-    }
-    return 0;
-  }, [userGoal, steps, distance]);
+      if (!hasScreenTimeAuthorization) {
+        // Don't auto-request Screen Time permissions - let user trigger it
+        console.log("Screen Time permissions not granted yet");
+      } else {
+        await loadInstalledApps();
+      }
+    };
 
-  // Get progress percentage as 0-100 value for Progress component
-  const getProgressPercentage = useCallback(() => {
-    return Math.round(calculateProgress() * 100);
-  }, [calculateProgress]);
+    initializeServices();
+  }, []);
 
   // Refresh all data
-  const handleRefresh = useCallback(() => {
-    if (user) {
-      fetchUserGoal();
-      const todayStr = new Date().toISOString().split("T")[0];
-      fetchDailyProgress(todayStr);
-      refreshData();
-      fetchStreakSaverStatus();
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      const today = new Date().toISOString().split("T")[0];
+      await Promise.all([
+        fetchUserGoal(),
+        fetchDailyProgress(today),
+        fetchStreakSaverStatus(),
+        hasHealthKitPermissions ? fetchDailyHealthData() : Promise.resolve(),
+        hasScreenTimeAuthorization ? loadInstalledApps() : Promise.resolve(),
+      ]);
+    } catch (error) {
+      console.error("Error refreshing data:", error);
+    } finally {
+      setRefreshing(false);
     }
   }, [
-    user,
     fetchUserGoal,
     fetchDailyProgress,
-    refreshData,
     fetchStreakSaverStatus,
+    hasHealthKitPermissions,
+    fetchDailyHealthData,
+    hasScreenTimeAuthorization,
+    loadInstalledApps,
   ]);
 
-  // Effect to refresh data when component mounts
-  useEffect(() => {
-    handleRefresh();
-  }, [handleRefresh]);
-
-  const getStatusBadge = () => {
-    if (calculateProgress() >= 1) {
-      return (
-        <Badge variant="success" style={styles.statusBadge}>
-          <MaterialCommunityIcons
-            name="check-circle"
-            size={14}
-            color="#059669"
-            style={{ marginRight: 4 }}
-          />
-          Completed
-        </Badge>
-      );
-    } else {
-      return (
-        <Badge variant="warning" style={styles.statusBadge}>
-          <MaterialCommunityIcons
-            name="help-circle"
-            size={14}
-            color="#D97706"
-            style={{ marginRight: 4 }}
-          />
-          Pending
-        </Badge>
-      );
+  // Handle Screen Time authorization
+  const handleScreenTimeAuthorization = useCallback(async () => {
+    try {
+      const granted = await requestScreenTimeAuthorization();
+      if (granted) {
+        await loadInstalledApps();
+        Alert.alert(
+          "Screen Time Authorized",
+          "You can now manage app blocking to help reach your goals!"
+        );
+      } else {
+        Alert.alert(
+          "Authorization Required",
+          "Screen Time access is needed to block distracting apps when you haven't reached your goals."
+        );
+      }
+    } catch (error) {
+      Alert.alert("Error", "Failed to request Screen Time authorization");
     }
-  };
+  }, [requestScreenTimeAuthorization, loadInstalledApps]);
+
+  // Handle app blocking based on goal progress
+  const handleAppBlocking = useCallback(async () => {
+    if (!hasScreenTimeAuthorization) {
+      Alert.alert(
+        "Authorization Required",
+        "Please authorize Screen Time access first"
+      );
+      return;
+    }
+
+    if (!userGoal) {
+      Alert.alert("No Goal Set", "Please set a daily goal first");
+      return;
+    }
+
+    const currentSteps = steps || 0;
+    const targetSteps = userGoal.target_value || 0;
+    const goalAchieved = currentSteps >= targetSteps;
+
+    if (goalAchieved) {
+      // Goal achieved - unblock apps
+      const success = await unblockAllApps();
+      if (success) {
+        Alert.alert(
+          "🎉 Congratulations!",
+          "You've reached your goal! All apps are now unblocked."
+        );
+      }
+    } else {
+      // Goal not achieved - block distracting apps
+      const success = await blockSocialMediaApps();
+      if (success) {
+        const remaining = targetSteps - currentSteps;
+        Alert.alert(
+          "🔒 Apps Blocked",
+          `You need ${remaining} more steps to unlock your apps. Keep going!`
+        );
+      }
+    }
+  }, [
+    hasScreenTimeAuthorization,
+    userGoal,
+    steps,
+    unblockAllApps,
+    blockSocialMediaApps,
+  ]);
+
+  // Calculate progress percentage
+  const progressPercentage = userGoal?.target_value
+    ? Math.min(((steps || 0) / userGoal.target_value) * 100, 100)
+    : 0;
+
+  const goalAchieved = userGoal?.target_value
+    ? (steps || 0) >= userGoal.target_value
+    : false;
 
   return (
     <ScrollView
-      style={styles.container}
-      contentContainerStyle={[
-        styles.contentContainer,
-        { backgroundColor: theme.colors.customBackground },
-      ]}
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+      }
     >
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Dashboard</Text>
-      </View>
+      <StyledHeader title="Dashboard" showBackButton={false} />
 
-      {/* User Profile Card */}
-      <StyledCard
-        withShadow
-        variant="gradient-purple"
-        style={styles.profileCard}
-      >
-        <CardContent>
-          <View style={styles.profileHeader}>
-            <View style={styles.avatarContainer}>
-              <MaterialCommunityIcons name="account" size={28} color="white" />
-            </View>
-            <Text style={styles.profileName}>
-              Welcome,{" "}
-              {profile?.username || user?.email?.split("@")[0] || "User"}
-            </Text>
-          </View>
-          <View style={styles.statRow}>
-            <View style={styles.statLabel}>
-              <MaterialCommunityIcons
-                name="currency-usd"
-                size={20}
-                color="#F59E0B"
-                style={styles.statIcon}
-              />
-              <Text style={styles.statText}>Coins</Text>
-            </View>
-            <Text style={styles.statValue}>{profile?.coin_balance || 0}</Text>
-          </View>
-          <View style={styles.statRow}>
-            <View style={styles.statLabel}>
-              <MaterialCommunityIcons
-                name="lightning-bolt"
-                size={20}
-                color="#F97316"
-                style={styles.statIcon}
-              />
-              <Text style={styles.statText}>Streak</Text>
-            </View>
-            <Text style={styles.statValue}>
-              {profile?.current_streak_length || 0} days
-            </Text>
-          </View>
-        </CardContent>
+      {/* Welcome Section */}
+      <StyledCard style={styles.welcomeCard}>
+        <Text style={[styles.welcomeText, { color: theme.colors.onSurface }]}>
+          Welcome back, {profile?.username || "Goal Guardian"}! 👋
+        </Text>
+        <Text
+          style={[styles.subtitle, { color: theme.colors.onSurfaceVariant }]}
+        >
+          {goalAchieved
+            ? "🎉 Congratulations! You've achieved your goal today!"
+            : "Let's crush your goals today!"}
+        </Text>
       </StyledCard>
 
-      {/* Daily Goal Card */}
-      <StyledCard withShadow style={styles.goalCard}>
-        <CardHeader>
-          <View style={styles.goalCardHeader}>
-            <View style={styles.goalTitleContainer}>
-              <MaterialCommunityIcons
-                name="target"
-                size={20}
-                color={theme.colors.purple700}
-                style={styles.goalIcon}
-              />
-              <Text style={styles.goalTitle}>Today's Goal</Text>
-            </View>
-            <TouchableOpacity
-              style={styles.refreshButton}
-              onPress={handleRefresh}
-              disabled={
-                isLoadingGoal || isLoadingProgress || isLoadingHealthData
-              }
-            >
-              <MaterialCommunityIcons
-                name="refresh"
-                size={16}
-                color={theme.colors.purple700}
-              />
-              <Text style={styles.refreshText}>Refresh Data</Text>
-            </TouchableOpacity>
+      {/* Goal Progress Section */}
+      <StyledCard style={styles.progressCard}>
+        <Text style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>
+          Today's Progress
+        </Text>
+
+        {isLoadingGoal || isLoadingProgress || isLoadingHealthData ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator
+              animating={true}
+              size="large"
+              color={theme.colors.primary}
+            />
+            <Text style={styles.loadingText}>Loading your progress...</Text>
           </View>
-        </CardHeader>
-        <CardContent>
-          {isLoadingGoal || isLoadingProgress || isLoadingHealthData ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color={theme.colors.purple700} />
-              <Text style={styles.loadingText}>Loading goal data...</Text>
-            </View>
-          ) : !userGoal ? (
-            <View style={styles.noGoalContainer}>
-              <Text style={styles.noGoalText}>No active goal set.</Text>
-              <StyledButton
-                variant="default"
-                onPress={() => router.push("/(tabs)/goals")}
-                style={styles.setGoalButton}
+        ) : userGoal ? (
+          <View style={styles.goalContainer}>
+            <Text style={[styles.goalText, { color: theme.colors.onSurface }]}>
+              Daily Goal: {userGoal.target_value} {userGoal.target_unit}
+            </Text>
+
+            {/* Progress Bar */}
+            <View style={styles.progressBarContainer}>
+              <View
+                style={[
+                  styles.progressBar,
+                  { backgroundColor: theme.colors.surfaceVariant },
+                ]}
               >
-                Set a Goal
+                <View
+                  style={[
+                    styles.progressFill,
+                    {
+                      backgroundColor: goalAchieved
+                        ? theme.colors.primary
+                        : theme.colors.secondary,
+                      width: `${progressPercentage}%`,
+                    },
+                  ]}
+                />
+              </View>
+              <Text
+                style={[styles.progressText, { color: theme.colors.onSurface }]}
+              >
+                {progressPercentage.toFixed(1)}%
+              </Text>
+            </View>
+
+            {/* Current Stats */}
+            <View style={styles.statsContainer}>
+              <View style={styles.statItem}>
+                <Text
+                  style={[styles.statValue, { color: theme.colors.primary }]}
+                >
+                  {steps || 0}
+                </Text>
+                <Text
+                  style={[
+                    styles.statLabel,
+                    { color: theme.colors.onSurfaceVariant },
+                  ]}
+                >
+                  Steps
+                </Text>
+              </View>
+              <View style={styles.statItem}>
+                <Text
+                  style={[styles.statValue, { color: theme.colors.primary }]}
+                >
+                  {distance?.toFixed(1) || 0}
+                </Text>
+                <Text
+                  style={[
+                    styles.statLabel,
+                    { color: theme.colors.onSurfaceVariant },
+                  ]}
+                >
+                  Kilometers
+                </Text>
+              </View>
+            </View>
+
+            {/* Health Error Display */}
+            {healthError && (
+              <Text style={[styles.errorText, { color: theme.colors.error }]}>
+                HealthKit: {healthError.message}
+              </Text>
+            )}
+          </View>
+        ) : (
+          <View style={styles.noGoalContainer}>
+            <Text
+              style={[
+                styles.noGoalText,
+                { color: theme.colors.onSurfaceVariant },
+              ]}
+            >
+              No active goal set. Set your first goal to get started!
+            </Text>
+            <StyledButton
+              onPress={() => router.push("/(tabs)/goals")}
+              style={styles.setGoalButton}
+            >
+              Set Daily Goal
+            </StyledButton>
+          </View>
+        )}
+      </StyledCard>
+
+      {/* HealthKit Permission Section */}
+      {!hasHealthKitPermissions && (
+        <StyledCard style={styles.permissionCard}>
+          <Text
+            style={[styles.sectionTitle, { color: theme.colors.onSurface }]}
+          >
+            📱 HealthKit Access
+          </Text>
+          <Text
+            style={[
+              styles.permissionText,
+              { color: theme.colors.onSurfaceVariant },
+            ]}
+          >
+            Grant access to track your steps and distance automatically
+          </Text>
+          <StyledButton
+            onPress={requestHealthKitPermissions}
+            style={styles.permissionButton}
+          >
+            Enable HealthKit
+          </StyledButton>
+        </StyledCard>
+      )}
+
+      {/* Screen Time Section */}
+      <StyledCard style={styles.screenTimeCard}>
+        <Text style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>
+          🔒 Screen Time Controls
+        </Text>
+
+        {!hasScreenTimeAuthorization ? (
+          <View>
+            <Text
+              style={[
+                styles.permissionText,
+                { color: theme.colors.onSurfaceVariant },
+              ]}
+            >
+              Block distracting apps when you haven't reached your goals
+            </Text>
+            <StyledButton
+              onPress={handleScreenTimeAuthorization}
+              style={styles.permissionButton}
+              loading={isLoadingScreenTime}
+            >
+              Enable App Blocking
+            </StyledButton>
+          </View>
+        ) : (
+          <View>
+            <Text
+              style={[
+                styles.screenTimeText,
+                { color: theme.colors.onSurfaceVariant },
+              ]}
+            >
+              {blockedApps.length > 0
+                ? `${blockedApps.length} apps currently blocked`
+                : "No apps currently blocked"}
+            </Text>
+
+            {installedApps.length > 0 && (
+              <View style={styles.appStatsContainer}>
+                <Text
+                  style={[
+                    styles.appStatsText,
+                    { color: theme.colors.onSurfaceVariant },
+                  ]}
+                >
+                  Social: {categorizedApps.Social?.length || 0} apps •
+                  Entertainment: {categorizedApps.Entertainment?.length || 0}{" "}
+                  apps
+                </Text>
+              </View>
+            )}
+
+            <View style={styles.screenTimeButtons}>
+              <StyledButton
+                onPress={handleAppBlocking}
+                style={[
+                  styles.screenTimeButton,
+                  {
+                    backgroundColor: goalAchieved
+                      ? theme.colors.primary
+                      : theme.colors.error,
+                  },
+                ]}
+                loading={isLoadingScreenTime}
+              >
+                {goalAchieved ? "🎉 Unlock Apps" : "🔒 Block Apps"}
               </StyledButton>
             </View>
-          ) : (
-            <View style={styles.goalContent}>
-              <Text style={styles.goalDescription}>
-                {userGoal.goal_type === "steps"
-                  ? `Walk/Run ${userGoal.target_value.toLocaleString()} steps`
-                  : userGoal.goal_type === "run_distance"
-                  ? `Run ${userGoal.target_value} ${userGoal.target_unit}`
-                  : "Goal details unavailable"}
+
+            {screenTimeError && (
+              <Text style={[styles.errorText, { color: theme.colors.error }]}>
+                Screen Time: {screenTimeError.message}
               </Text>
-
-              <View style={styles.progressTextContainer}>
-                <Text style={styles.progressNumber}>
-                  {userGoal.goal_type === "steps" && steps !== undefined
-                    ? steps.toLocaleString()
-                    : userGoal.goal_type === "run_distance" &&
-                      distance !== undefined
-                    ? distance.toFixed(2)
-                    : "0"}
-                </Text>
-                <Text style={styles.progressTarget}>
-                  / {userGoal.target_value.toLocaleString()}{" "}
-                  {userGoal.target_unit}
-                </Text>
-              </View>
-
-              <Progress
-                value={getProgressPercentage()}
-                style={styles.progressBar}
-              />
-
-              <View style={styles.statusContainer}>
-                <Text style={styles.progressPercentText}>
-                  {getProgressPercentage()}% complete
-                </Text>
-                {getStatusBadge()}
-              </View>
-            </View>
-          )}
-        </CardContent>
-      </StyledCard>
-
-      {/* Active Rewards Card */}
-      <StyledCard withShadow style={styles.rewardsCard}>
-        <CardHeader>
-          <View style={styles.rewardsHeader}>
-            <MaterialCommunityIcons
-              name="trophy"
-              size={20}
-              color="#10B981"
-              style={styles.rewardsIcon}
-            />
-            <Text style={styles.rewardsTitle}>Active Rewards</Text>
+            )}
           </View>
-        </CardHeader>
-        <CardContent>
-          {hasStreakSaver ? (
-            <View style={styles.activeRewardBadge}>
-              <View style={styles.activeRewardDot} />
-              <Text style={styles.activeRewardText}>
-                Streak Saver is ACTIVE
-              </Text>
-            </View>
-          ) : (
-            <Text style={styles.noActiveRewardsText}>
-              No active rewards. Visit the store to purchase rewards!
+        )}
+      </StyledCard>
+
+      {/* Streak Saver Status */}
+      {hasStreakSaver && (
+        <StyledCard style={styles.streakCard}>
+          <View style={styles.streakContainer}>
+            <Text
+              style={[styles.streakText, { color: theme.colors.onSurface }]}
+            >
+              🛡️ Streak Saver Active
             </Text>
-          )}
-        </CardContent>
-      </StyledCard>
+            <Badge variant="success">Protected</Badge>
+          </View>
+          <Text
+            style={[
+              styles.streakSubtext,
+              { color: theme.colors.onSurfaceVariant },
+            ]}
+          >
+            Your streak is protected for today
+          </Text>
+        </StyledCard>
+      )}
 
-      {/* Sign Out Button */}
-      <StyledCard withShadow style={styles.signOutCard}>
-        <CardContent>
-          <TouchableOpacity style={styles.signOutButton} onPress={signOut}>
-            <Text style={styles.signOutText}>Sign Out</Text>
-          </TouchableOpacity>
-        </CardContent>
+      {/* Quick Actions */}
+      <StyledCard style={styles.actionsCard}>
+        <Text style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>
+          Quick Actions
+        </Text>
+        <View style={styles.actionButtons}>
+          <StyledButton
+            onPress={() => router.push("/(tabs)/goals")}
+            variant="outline"
+            style={styles.actionButton}
+          >
+            View Goals
+          </StyledButton>
+          <StyledButton
+            onPress={() => router.push("/(tabs)/progress")}
+            variant="outline"
+            style={styles.actionButton}
+          >
+            Progress History
+          </StyledButton>
+          <StyledButton
+            onPress={() => router.push("/(tabs)/rewards-store")}
+            variant="outline"
+            style={styles.actionButton}
+          >
+            Rewards Store
+          </StyledButton>
+        </View>
       </StyledCard>
-
-      {/* Bottom padding for navigation */}
-      <View style={styles.bottomPadding} />
     </ScrollView>
   );
 }
@@ -363,216 +505,162 @@ export default function DashboardScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    padding: 16,
   },
-  contentContainer: {
-    paddingHorizontal: 16,
-    paddingBottom: 32,
-  },
-  header: {
-    alignItems: "center",
-    paddingVertical: 24,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#1F2937", // slate-800
-  },
-  profileCard: {
+  welcomeCard: {
     marginBottom: 16,
+    padding: 20,
   },
-  profileHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  avatarContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: "rgba(255,255,255,0.2)",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 12,
-  },
-  profileName: {
+  welcomeText: {
     fontSize: 20,
     fontWeight: "bold",
-    color: "white",
-  },
-  statRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
     marginBottom: 8,
   },
-  statLabel: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  statIcon: {
-    marginRight: 8,
-  },
-  statText: {
+  subtitle: {
     fontSize: 16,
-    fontWeight: "500",
-    color: "white",
+    lineHeight: 22,
   },
-  statValue: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "white",
-  },
-  goalCard: {
+  progressCard: {
     marginBottom: 16,
+    padding: 20,
   },
-  goalCardHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  goalTitleContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  goalIcon: {
-    marginRight: 8,
-  },
-  goalTitle: {
-    fontSize: 16,
+  sectionTitle: {
+    fontSize: 18,
     fontWeight: "bold",
-    color: "#1F2937", // slate-800
-  },
-  refreshButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 8,
-  },
-  refreshText: {
-    fontSize: 12,
-    color: "#7C3AED", // purple-700
-    marginLeft: 4,
+    marginBottom: 16,
   },
   loadingContainer: {
     alignItems: "center",
-    justifyContent: "center",
-    padding: 24,
+    paddingVertical: 20,
   },
   loadingText: {
-    marginTop: 16,
-    color: "#64748B", // slate-500
+    marginTop: 12,
+    fontSize: 14,
+  },
+  goalContainer: {
+    alignItems: "center",
+  },
+  goalText: {
+    fontSize: 16,
+    fontWeight: "600",
+    marginBottom: 16,
+  },
+  progressBarContainer: {
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  progressBar: {
+    flex: 1,
+    height: 12,
+    borderRadius: 6,
+    marginRight: 12,
+  },
+  progressFill: {
+    height: "100%",
+    borderRadius: 6,
+  },
+  progressText: {
+    fontSize: 14,
+    fontWeight: "600",
+    minWidth: 50,
+  },
+  statsContainer: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    width: "100%",
+  },
+  statItem: {
+    alignItems: "center",
+  },
+  statValue: {
+    fontSize: 24,
+    fontWeight: "bold",
+  },
+  statLabel: {
+    fontSize: 14,
+    marginTop: 4,
   },
   noGoalContainer: {
     alignItems: "center",
-    justifyContent: "center",
-    padding: 24,
+    paddingVertical: 20,
   },
   noGoalText: {
+    fontSize: 16,
+    textAlign: "center",
     marginBottom: 16,
-    color: "#64748B", // slate-500
   },
   setGoalButton: {
-    width: "100%",
+    paddingHorizontal: 24,
   },
-  goalContent: {
-    paddingVertical: 8,
+  permissionCard: {
+    marginBottom: 16,
+    padding: 20,
   },
-  goalDescription: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#334155", // slate-700
+  permissionText: {
+    fontSize: 14,
+    lineHeight: 20,
     marginBottom: 16,
   },
-  progressTextContainer: {
-    flexDirection: "row",
-    alignItems: "flex-end",
+  permissionButton: {
+    alignSelf: "flex-start",
+  },
+  screenTimeCard: {
+    marginBottom: 16,
+    padding: 20,
+  },
+  screenTimeText: {
+    fontSize: 14,
     marginBottom: 12,
   },
-  progressNumber: {
-    fontSize: 32,
-    fontWeight: "bold",
-    color: "#7C3AED", // purple-700
+  appStatsContainer: {
+    marginBottom: 16,
   },
-  progressTarget: {
-    fontSize: 18,
-    color: "#64748B", // slate-500
-    marginLeft: 4,
-    paddingBottom: 4,
+  appStatsText: {
+    fontSize: 12,
+    fontStyle: "italic",
   },
-  progressBar: {
-    marginBottom: 12,
-    height: 12,
-  },
-  statusContainer: {
+  screenTimeButtons: {
     flexDirection: "row",
+    gap: 12,
+  },
+  screenTimeButton: {
+    flex: 1,
+  },
+  streakCard: {
+    marginBottom: 16,
+    padding: 20,
+  },
+  streakContainer: {
+    flexDirection: "row",
+    alignItems: "center",
     justifyContent: "space-between",
-    alignItems: "center",
+    marginBottom: 8,
   },
-  progressPercentText: {
-    fontSize: 14,
-    color: "#64748B", // slate-500
-  },
-  statusBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  rewardsCard: {
-    marginBottom: 16,
-  },
-  rewardsHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  rewardsIcon: {
-    marginRight: 8,
-  },
-  rewardsTitle: {
+  streakText: {
     fontSize: 16,
-    fontWeight: "bold",
-    color: "#1F2937", // slate-800
+    fontWeight: "600",
   },
-  activeRewardBadge: {
-    backgroundColor: "#ECFDF5", // green-50
-    borderWidth: 1,
-    borderColor: "#A7F3D0", // green-200
-    borderRadius: 8,
-    padding: 12,
+  streakSubtext: {
+    fontSize: 14,
+  },
+  actionsCard: {
+    marginBottom: 32,
+    padding: 20,
+  },
+  actionButtons: {
     flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
+    flexWrap: "wrap",
+    gap: 12,
   },
-  activeRewardDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "#10B981", // green-500
-    marginRight: 8,
+  actionButton: {
+    flex: 1,
+    minWidth: 100,
   },
-  activeRewardText: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: "#065F46", // green-800
-  },
-  signOutCard: {
-    marginBottom: 16,
-  },
-  signOutButton: {
-    backgroundColor: "#EF4444", // red-500
-    borderRadius: 8,
-    paddingVertical: 12,
-    alignItems: "center",
-  },
-  signOutText: {
-    color: "white",
-    fontWeight: "500",
-    fontSize: 16,
-  },
-  bottomPadding: {
-    height: 80,
-  },
-  noActiveRewardsText: {
-    fontSize: 14,
-    color: "#64748B", // slate-500
-    textAlign: "center",
-    padding: 12,
+  errorText: {
+    fontSize: 12,
+    marginTop: 8,
+    fontStyle: "italic",
   },
 });
